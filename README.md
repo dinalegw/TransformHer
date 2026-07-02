@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./home.png" alt="TransformHer" width="600"/>
+  <img src="./public/hero-reading.png" alt="TransformHer" width="600"/>
 </p>
 
 <h1 align="center">✦ TransformHer ✦</h1>
