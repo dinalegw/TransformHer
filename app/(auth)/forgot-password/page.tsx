@@ -10,7 +10,6 @@ import { SiteFooter } from '@/components/site-footer'
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [sent, setSent] = useState(false)
-  const [devLink, setDevLink] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -29,7 +28,6 @@ export default function ForgotPasswordPage() {
         setError(data.error || 'Something went wrong')
       } else {
         setSent(true)
-        if (data.devResetLink) setDevLink(data.devResetLink)
       }
     } catch {
       setError('Something went wrong')
@@ -54,14 +52,8 @@ export default function ForgotPasswordPage() {
           {sent ? (
             <div className="mt-8 space-y-5 text-center">
               <p className="text-sm text-muted-foreground">
-                If that email is registered, you&apos;ll receive a password reset link shortly.
+                If that email is registered, a password reset link has been sent. Check your inbox.
               </p>
-              {devLink && (
-                <p className="rounded-lg border border-border bg-muted px-4 py-3 text-xs text-muted-foreground break-all">
-                  <span className="font-medium text-foreground">Dev link:</span>{' '}
-                  <a href={devLink} className="text-primary hover:underline">{devLink}</a>
-                </p>
-              )}
               <Link
                 href="/login"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
