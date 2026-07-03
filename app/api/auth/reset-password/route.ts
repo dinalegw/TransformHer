@@ -1,0 +1,22 @@
+import { NextResponse } from 'next/server'
+import { verifyResetToken, updatePassword } from '@/lib/auth'
+
+export async function POST(req: Request) {
+  try {
+    const { token, password } = await req.json()
+    if (!token || !password) {
+      return NextResponse.json({ error: 'Token and password are required' }, { status: 400 })
+    }
+    if (password.length < 6) {
+      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+    }
+    const email = verifyResetToken(token)
+    if (!email) {
+      return NextResponse.json({ error: 'Invalid or expired reset token' }, { status: 400 })
+    }
+    updatePassword(email, password)
+    return NextResponse.json({ message: 'Password updated successfully' })
+  } catch {
+    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  }
+}

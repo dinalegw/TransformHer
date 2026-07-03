@@ -106,6 +106,36 @@ export async function deleteSession(): Promise<void> {
   // cookie-based, nothing to clear server-side
 }
 
+const resetTokens = new Map<string, { email: string; exp: number }>()
+
+export function generateResetToken(email: string): string {
+  const token = randomBytes(32).toString('hex')
+  resetTokens.set(token, {
+    email: email.toLowerCase(),
+    exp: Date.now() + 60 * 60 * 1000,
+  })
+  return token
+}
+
+export function verifyResetToken(token: string): string | null {
+  const data = resetTokens.get(token)
+  if (!data) return null
+  if (data.exp < Date.now()) {
+    resetTokens.delete(token)
+    return null
+  }
+  return data.email
+}
+
+export function updatePassword(email: string, newPassword: string): boolean {
+  const userId = emailIndex.get(email.toLowerCase())
+  if (!userId) return false
+  const user = users.get(userId)
+  if (!user) return false
+  user.passwordHash = hashPassword(newPassword)
+  return true
+}
+
 const ADMIN_HASH = '219539f6cbd1d1a25a03a1cfe5c30973:6b4e02810303fcbe9714d15e3470bc63751109cb4cc148999e3e97d1a4267182'
 
 function seedAdminUser() {
