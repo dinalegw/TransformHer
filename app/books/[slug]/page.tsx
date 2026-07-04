@@ -12,6 +12,8 @@ import { PaystackButton } from '@/components/paystack-button'
 import { getBookBySlug, getRelatedBooks } from '@/lib/books'
 import { formatPrice } from '@/lib/format'
 import { getCurrentUser } from '@/lib/auth'
+import { verifyPaystackPayment } from '@/lib/paystack'
+import { sendOrderConfirmation, sendAdminOrderNotification } from '@/lib/email'
 
 export async function generateMetadata({
   params,
@@ -32,12 +34,45 @@ export default async function BookDetailPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ purchased?: string }>
+  searchParams: Promise<{ purchased?: string; reference?: string; trxref?: string }>
 }) {
   const { slug } = await params
-  const { purchased } = await searchParams
+  const { purchased, reference, trxref } = await searchParams
   const book = await getBookBySlug(slug)
   if (!book) notFound()
+
+  if (purchased === 'true') {
+    const ref = reference ?? trxref
+    if (ref) {
+      try {
+        const result = await verifyPaystackPayment(ref)
+        if (result.status && result.data?.metadata) {
+          const { bookTitle } = result.data.metadata
+          const customerEmail = result.data.customer?.email ?? ''
+          const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
+
+          if (customerEmail) {
+            await sendOrderConfirmation(customerEmail, bookTitle ?? book.title, amount)
+          }
+
+          const adminEmail = process.env.ADMIN_EMAIL
+          if (adminEmail && customerEmail) {
+            await sendAdminOrderNotification(
+              adminEmail,
+              customerEmail,
+              result.data.customer?.first_name
+                ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
+                : 'Customer',
+              bookTitle ?? book.title,
+              amount,
+            )
+          }
+        }
+      } catch (err) {
+        console.error('Payment verification failed:', err)
+      }
+    }
+  }
 
   const related = await getRelatedBooks(book.category, book.slug, 4)
   const user = await getCurrentUser()
