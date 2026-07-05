@@ -20,12 +20,19 @@ export default function SignupPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
+
+    const trimmedName = name.trim()
+    const trimmedEmail = email.trim()
+    if (!trimmedName) { setError('Name is required'); return }
+    if (!trimmedEmail) { setError('Email is required'); return }
+    if (password.length < 8) { setError('Password must be at least 8 characters'); return }
+
     setLoading(true)
     try {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -50,7 +57,7 @@ export default function SignupPage() {
             <UserPlus className="mx-auto size-8 text-primary" />
             <h1 className="mt-4 font-heading text-3xl text-foreground">Create your account</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Join the TransformHer community
+              Join our community
             </p>
           </div>
 

@@ -13,7 +13,7 @@ interface AuthUser {
   isAdmin: boolean
 }
 
-export function AuthButtons({ user }: { user: AuthUser | null }) {
+export function AuthButtons({ user }: { user: AuthUser | null | 'loading' }) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -22,6 +22,10 @@ export function AuthButtons({ user }: { user: AuthUser | null }) {
     setMenuOpen(false)
     router.push('/')
     router.refresh()
+  }
+
+  if (user === 'loading') {
+    return <div className="h-9 w-24 rounded-full bg-secondary/50 animate-pulse" />
   }
 
   if (user) {

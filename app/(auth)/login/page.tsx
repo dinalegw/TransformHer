@@ -21,12 +21,17 @@ function LoginForm() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
+
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) { setError('Email is required'); return }
+    if (!password) { setError('Password is required'); return }
+
     setLoading(true)
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: trimmedEmail, password }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -51,7 +56,7 @@ function LoginForm() {
             <LogIn className="mx-auto size-8 text-primary" />
             <h1 className="mt-4 font-heading text-3xl text-foreground">Welcome back</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sign in to your TransformHer account
+              Sign in to your account
             </p>
           </div>
 

@@ -8,7 +8,7 @@ import { getAllBooks } from '@/lib/books'
 export const metadata: Metadata = {
   title: 'The Library',
   description:
-    'Browse the full TransformHer library of transformational books for women.',
+    'Browse the full library of transformational books for women.',
 }
 
 type SortOption = 'popular' | 'newest' | 'price-asc' | 'price-desc'
@@ -32,7 +32,7 @@ export default async function BooksPage({
         <section className="border-b border-border/60 bg-secondary/40">
           <div className="mx-auto max-w-6xl px-4 py-14 md:px-6">
             <p className="text-xs uppercase tracking-luxe text-primary">
-              The TransformHer Library
+              The Library
             </p>
             <h1 className="mt-3 font-heading text-4xl text-foreground md:text-5xl">
               Every book, one collection.

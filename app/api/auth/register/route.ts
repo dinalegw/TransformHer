@@ -1,16 +1,21 @@
 import { NextResponse } from 'next/server'
-import { createUser, createSession } from '@/lib/auth'
+import { createUser, createSession, validateEmail, validatePassword, validateName } from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password } = await req.json()
-    if (!name || !email || !password) {
-      return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 })
-    }
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
-    }
-    const user = await createUser(name, email, password)
+    const body = await req.json()
+    const { name, email, password } = body
+
+    const nameError = validateName(name)
+    if (nameError) return NextResponse.json({ error: nameError }, { status: 400 })
+
+    const emailError = validateEmail(email)
+    if (emailError) return NextResponse.json({ error: emailError }, { status: 400 })
+
+    const passwordError = validatePassword(password)
+    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })
+
+    const user = await createUser(name.trim(), email, password)
     const sessionId = await createSession(user.id)
     const res = NextResponse.json({ user }, { status: 201 })
     res.cookies.set('session', sessionId, {
@@ -23,6 +28,6 @@ export async function POST(req: Request) {
     return res
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 400 })
+    return NextResponse.json({ error: message }, { status: 409 })
   }
 }

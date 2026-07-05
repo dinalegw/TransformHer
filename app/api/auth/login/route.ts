@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server'
-import { authenticateUser, createSession } from '@/lib/auth'
+import { authenticateUser, createSession, validateEmail, validatePassword } from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json()
-    if (!email || !password) {
-      return NextResponse.json({ error: 'Email and password are required' }, { status: 400 })
-    }
+    const body = await req.json()
+    const { email, password } = body
+
+    const emailError = validateEmail(email)
+    if (emailError) return NextResponse.json({ error: emailError }, { status: 400 })
+
+    const passwordError = validatePassword(password)
+    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })
+
     const user = await authenticateUser(email, password)
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     }
+
     const sessionId = await createSession(user.id)
     const res = NextResponse.json({ user }, { status: 200 })
     res.cookies.set('session', sessionId, {

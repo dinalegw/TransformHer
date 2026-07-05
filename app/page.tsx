@@ -198,7 +198,7 @@ export default async function HomePage() {
                 {'\u2019'}re becoming.
               </h2>
               <p className="mt-6 max-w-md leading-relaxed text-accent-foreground/75">
-                Every title in the TransformHer library is chosen with
+                Every title in the library is chosen with
                 intention: to challenge, comfort, and carry you forward. Read
                 beautifully on any device, and return to the words that meet you
                 exactly where you are.

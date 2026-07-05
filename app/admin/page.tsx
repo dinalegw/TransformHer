@@ -8,7 +8,7 @@ import { SiteFooter } from '@/components/site-footer'
 
 export const metadata: Metadata = {
   title: 'Admin',
-  description: 'Manage the TransformHer library.',
+  description: 'Manage the library.',
 }
 
 export default async function AdminPage() {

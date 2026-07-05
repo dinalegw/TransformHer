@@ -18,22 +18,23 @@ const NAV = [
 export function SiteHeader() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [user, setUser] = useState<{ id: string; name: string; email: string; isAdmin: boolean } | null>(null)
+  const [user, setUser] = useState<{ id: string; name: string; email: string; isAdmin: boolean } | null | 'loading'>('loading')
+  const isLoggedIn = user !== null && user !== 'loading'
 
   useEffect(() => {
+    let cancelled = false
     fetch('/api/auth/me')
       .then((r) => r.json())
-      .then((data) => setUser(data.user))
-      .catch(() => setUser(null))
+      .then((data) => { if (!cancelled) setUser(data.user) })
+      .catch(() => { if (!cancelled) setUser(null) })
+    return () => { cancelled = true }
   }, [])
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-6">
-        <Link href="/" className="flex items-center gap-2" aria-label="TransformHer home">
-          <span className="font-heading text-xl tracking-tight text-foreground md:text-2xl">
-            Transform<span className="text-primary">Her</span>
-          </span>
+        <Link href="/" className="font-heading text-xl tracking-tight text-foreground md:text-2xl">
+          Bookstore
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
@@ -80,10 +81,10 @@ export function SiteHeader() {
               </Link>
             ))}
             <div className="mt-2 flex gap-2">
-              {user ? (
+              {isLoggedIn ? (
                 <>
                   <span className="flex-1 rounded-md px-2 py-2 text-sm text-muted-foreground">
-                    {user.name}
+                    {user!.name}
                   </span>
                   <Button asChild variant="ghost" size="sm" className="rounded-full">
                     <Link href="/api/auth/logout" onClick={(e) => { e.preventDefault(); fetch('/api/auth/logout', { method: 'POST' }).then(() => { setOpen(false); window.location.href = '/' }) }}>

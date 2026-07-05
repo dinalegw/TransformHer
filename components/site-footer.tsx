@@ -8,7 +8,7 @@ export function SiteFooter() {
         <div className="grid gap-10 md:grid-cols-4">
           <div className="md:col-span-1">
             <span className="font-heading text-2xl">
-              Transform<span className="text-primary">Her</span>
+              Bookstore
             </span>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-accent-foreground/70">
               Transformational books for the woman becoming everything she was
@@ -69,7 +69,7 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-accent-foreground/15 pt-6 text-xs text-accent-foreground/60 md:flex-row">
           <p>
-            {'\u00A9'} {new Date().getFullYear()} TransformHer. All rights
+            {'\u00A9'} {new Date().getFullYear()} Bookstore. All rights
             reserved.
           </p>
           <p>Made for women becoming.</p>

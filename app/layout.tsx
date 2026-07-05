@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'TransformHer — Transformational Books for Women',
-    template: '%s | TransformHer',
+    default: 'Bookstore — Transformational Books for Women',
+    template: '%s | Bookstore',
   },
   description:
     'A luxury digital bookstore and reading platform with transformational books that help women grow in confidence, wealth, wellness, and purpose.',
