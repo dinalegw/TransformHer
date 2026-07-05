@@ -29,7 +29,13 @@ declare global {
   var __authStore: AuthStore | undefined
 }
 
-const SECRET: string = process.env.AUTH_SECRET ?? (() => { throw new Error('AUTH_SECRET environment variable is required') })()
+function getSecret(): string {
+  const secret = process.env.AUTH_SECRET
+  if (!secret) {
+    throw new Error('AUTH_SECRET environment variable is required')
+  }
+  return secret
+}
 
 const DATA_DIR = join(process.cwd(), 'data')
 const USERS_FILE = join(DATA_DIR, 'users.json')
@@ -109,7 +115,7 @@ function verifyPassword(password: string, stored: string): boolean {
 
 function signToken(payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url')
-  const sig = createHmac('sha256', SECRET).update(data).digest('base64url')
+  const sig = createHmac('sha256', getSecret()).update(data).digest('base64url')
   return `${data}.${sig}`
 }
 
@@ -117,7 +123,7 @@ function verifyToken(token: string): Record<string, unknown> | null {
   const parts = token.split('.')
   if (parts.length !== 2) return null
   const [data, sig] = parts
-  const expectedSig = createHmac('sha256', SECRET).update(data).digest('base64url')
+  const expectedSig = createHmac('sha256', getSecret()).update(data).digest('base64url')
   if (sig !== expectedSig) return null
   try {
     return JSON.parse(Buffer.from(data, 'base64url').toString('utf-8'))
