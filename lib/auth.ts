@@ -3,6 +3,9 @@ import { cookies } from 'next/headers'
 import { randomUUID, pbkdf2Sync, randomBytes, createHmac } from 'crypto'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
+import { eq } from 'drizzle-orm'
+import { getDb } from '@/lib/db/connection'
+import { user as userTable } from '@/lib/db/schema'
 
 export interface AuthUser {
   id: string
@@ -173,8 +176,34 @@ export async function createUser(
   email: string,
   password: string,
 ): Promise<{ id: string; name: string; email: string }> {
-  const store = getStore()
   const normalizedEmail = normalizeEmail(email)
+  const db = getDb()
+
+  if (db) {
+    const existing = await db.select({ id: userTable.id })
+      .from(userTable)
+      .where(eq(userTable.email, normalizedEmail))
+      .limit(1)
+
+    if (existing.length > 0) {
+      throw new Error('An account with this email already exists')
+    }
+
+    const id = randomUUID()
+    const passwordHash = hashPassword(password)
+    await db.insert(userTable).values({
+      id,
+      name: name.trim(),
+      email: normalizedEmail,
+      passwordHash,
+      isAdmin: false,
+    })
+
+    return { id, name: name.trim(), email: normalizedEmail }
+  }
+
+  // Fall back to in-memory
+  const store = getStore()
 
   if (store.emailIndex.has(normalizedEmail)) {
     throw new Error('An account with this email already exists')
@@ -201,8 +230,39 @@ export async function authenticateUser(
   email: string,
   password: string,
 ): Promise<{ id: string; name: string; email: string; isAdmin: boolean } | null> {
-  const store = getStore()
   const normalizedEmail = normalizeEmail(email)
+  const db = getDb()
+
+  if (db) {
+    const rows = await db.select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      passwordHash: userTable.passwordHash,
+      isAdmin: userTable.isAdmin,
+    })
+      .from(userTable)
+      .where(eq(userTable.email, normalizedEmail))
+      .limit(1)
+
+    if (rows.length === 0) return null
+
+    const user = rows[0]
+    if (!user.passwordHash) return null
+
+    const valid = verifyPassword(password, user.passwordHash)
+    if (!valid) return null
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      isAdmin: user.isAdmin ?? false,
+    }
+  }
+
+  // Fall back to in-memory
+  const store = getStore()
   const userId = store.emailIndex.get(normalizedEmail)
   if (!userId) return null
 
@@ -216,18 +276,43 @@ export async function authenticateUser(
 }
 
 export async function createSession(userId: string): Promise<string> {
+  const db = getDb()
+
+  if (db) {
+    const rows = await db.select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      isAdmin: userTable.isAdmin,
+    })
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .limit(1)
+
+    if (rows.length === 0) throw new Error('User not found')
+    const u = rows[0]
+
+    return signToken({
+      userId: u.id,
+      name: u.name,
+      email: u.email,
+      isAdmin: u.isAdmin ?? false,
+      exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+    })
+  }
+
+  // Fall back to in-memory
   const store = getStore()
   const user = store.users.get(userId)
   if (!user) throw new Error('User not found')
 
-  const token = signToken({
+  return signToken({
     userId: user.id,
     name: user.name,
     email: user.email,
     isAdmin: user.isAdmin,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   })
-  return token
 }
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
@@ -241,16 +326,11 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const exp = payload.exp as number
   if (exp < Date.now()) return null
 
-  const store = getStore()
-  const userId = payload.userId as string
-  const user = store.users.get(userId)
-  if (!user) return null
-
   return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    isAdmin: user.isAdmin,
+    id: payload.userId as string,
+    name: payload.name as string,
+    email: payload.email as string,
+    isAdmin: payload.isAdmin as boolean,
   }
 }
 
@@ -284,8 +364,22 @@ export function verifyResetToken(token: string): string | null {
 }
 
 export function updatePassword(email: string, newPassword: string): boolean {
+  const normalizedEmail = normalizeEmail(email)
+  const db = getDb()
+
+  if (db) {
+    const passwordHash = hashPassword(newPassword)
+    db.update(userTable)
+      .set({ passwordHash })
+      .where(eq(userTable.email, normalizedEmail))
+      .then((result) => {})
+      .catch(() => {})
+    return true
+  }
+
+  // Fall back to in-memory
   const store = getStore()
-  const userId = store.emailIndex.get(normalizeEmail(email))
+  const userId = store.emailIndex.get(normalizedEmail)
   if (!userId) return false
 
   const user = store.users.get(userId)

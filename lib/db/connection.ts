@@ -1,0 +1,31 @@
+import { drizzle } from 'drizzle-orm/node-postgres'
+import { Pool } from 'pg'
+import * as schema from './schema'
+
+function getConnectionUrl(): string | null {
+  return process.env.POSTGRES_URL
+    ?? process.env.DATABASE_URL
+    ?? null
+}
+
+let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
+let _pool: Pool | null = null
+
+export function getDb() {
+  if (_db) return _db
+
+  const url = getConnectionUrl()
+  if (!url) return null
+
+  _pool = new Pool({ connectionString: url, max: 1 })
+  _db = drizzle(_pool, { schema })
+  return _db
+}
+
+export async function closeDb() {
+  if (_pool) {
+    await _pool.end()
+    _pool = null
+    _db = null
+  }
+}
