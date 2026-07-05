@@ -1,9 +1,11 @@
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
+import { drizzle } from 'drizzle-orm/neon-serverless'
+import { Pool } from '@neondatabase/serverless'
 import * as schema from './schema'
 
 function getConnectionUrl(): string | null {
-  return process.env.POSTGRES_URL
+  return process.env.POSTGRES_URL_NON_POOLING
+    ?? process.env.POSTGRES_URL
+    ?? process.env.DATABASE_URL_UNPOOLED
     ?? process.env.DATABASE_URL
     ?? null
 }

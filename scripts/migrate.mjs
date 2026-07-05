@@ -1,8 +1,8 @@
-import pg from 'pg'
+import { Pool } from '@neondatabase/serverless'
 
-const { Pool } = pg
-
-const connectionString = process.env.POSTGRES_URL
+const connectionString = process.env.POSTGRES_URL_NON_POOLING
+  ?? process.env.POSTGRES_URL
+  ?? process.env.DATABASE_URL_UNPOOLED
   ?? process.env.DATABASE_URL
   ?? null
 
