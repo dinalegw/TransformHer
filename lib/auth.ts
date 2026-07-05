@@ -37,8 +37,13 @@ function getSecret(): string {
   return secret
 }
 
-const DATA_DIR = join(process.cwd(), 'data')
-const USERS_FILE = join(DATA_DIR, 'users.json')
+function getDataDir(): string {
+  return join(process.cwd(), 'data')
+}
+
+function getUsersFile(): string {
+  return join(getDataDir(), 'users.json')
+}
 
 function loadStore(): AuthStore {
   const store: AuthStore = {
@@ -48,8 +53,9 @@ function loadStore(): AuthStore {
   }
 
   try {
-    if (existsSync(USERS_FILE)) {
-      const raw = readFileSync(USERS_FILE, 'utf-8')
+    const file = getUsersFile()
+    if (existsSync(file)) {
+      const raw = readFileSync(file, 'utf-8')
       const data = JSON.parse(raw)
       if (Array.isArray(data.users)) {
         for (const u of data.users) {
@@ -72,8 +78,9 @@ function loadStore(): AuthStore {
 
 function saveStore(store: AuthStore): void {
   try {
-    if (!existsSync(DATA_DIR)) {
-      mkdirSync(DATA_DIR, { recursive: true })
+    const dir = getDataDir()
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
     }
     const data = {
       users: Array.from(store.users.values()),
@@ -83,7 +90,7 @@ function saveStore(store: AuthStore): void {
         exp: value.exp,
       })),
     }
-    writeFileSync(USERS_FILE, JSON.stringify(data, null, 2), 'utf-8')
+    writeFileSync(getUsersFile(), JSON.stringify(data, null, 2), 'utf-8')
   } catch {
     // silently fail – data is still in memory
   }
@@ -92,6 +99,7 @@ function saveStore(store: AuthStore): void {
 function getStore(): AuthStore {
   if (!globalThis.__authStore) {
     globalThis.__authStore = loadStore()
+    seedAdminUser()
   }
   return globalThis.__authStore
 }
@@ -306,6 +314,3 @@ function seedAdminUser(): void {
   store.emailIndex.set('admin@transformher.com', id)
   persistStore()
 }
-
-// Seed admin on first load
-seedAdminUser()
