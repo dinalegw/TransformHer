@@ -1,18 +1,28 @@
 import Courier from '@trycourier/courier'
 
-const client = new Courier({ apiKey: process.env.COURIER_API_KEY })
+let _client: Courier | null = null
 
-const TEMPLATES = {
-  passwordReset: process.env.COURIER_TEMPLATE_PASSWORD_RESET!,
-  orderConfirmation: process.env.COURIER_TEMPLATE_ORDER_CONFIRMATION!,
-  adminOrder: process.env.COURIER_TEMPLATE_ADMIN_ORDER!,
+function getClient() {
+  if (!_client) {
+    _client = new Courier({ apiKey: process.env.COURIER_API_KEY })
+  }
+  return _client
+}
+
+function getTemplate(key: string): string {
+  const val = process.env[key]
+  if (!val) {
+    throw new Error(`${key} environment variable is required`)
+  }
+  return val
 }
 
 export async function sendPasswordResetEmail(to: string, resetLink: string) {
+  const client = getClient()
   await client.send.message({
     message: {
       to: { email: to },
-      template: TEMPLATES.passwordReset,
+      template: getTemplate('COURIER_TEMPLATE_PASSWORD_RESET'),
       data: { resetLink },
     },
   })
@@ -23,10 +33,11 @@ export async function sendOrderConfirmation(
   bookTitle: string,
   amount: string,
 ) {
+  const client = getClient()
   await client.send.message({
     message: {
       to: { email: to },
-      template: TEMPLATES.orderConfirmation,
+      template: getTemplate('COURIER_TEMPLATE_ORDER_CONFIRMATION'),
       data: { bookTitle, amount },
     },
   })
@@ -39,10 +50,11 @@ export async function sendAdminOrderNotification(
   bookTitle: string,
   amount: string,
 ) {
+  const client = getClient()
   await client.send.message({
     message: {
       to: { email: adminEmail },
-      template: TEMPLATES.adminOrder,
+      template: getTemplate('COURIER_TEMPLATE_ADMIN_ORDER'),
       data: { bookTitle, customerName, customerEmail, amount },
     },
   })
