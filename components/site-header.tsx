@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
-import { Menu, X } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Menu, X, ShoppingCart } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AuthButtons } from '@/components/auth-buttons'
@@ -25,14 +25,32 @@ export function SiteHeader() {
   const [user, setUser] = useState<{ id: string; name: string; email: string; isAdmin: boolean } | null | 'loading'>('loading')
   const isLoggedIn = user !== null && user !== 'loading'
 
+  const [cartCount, setCartCount] = useState(0)
+
+  const fetchCartCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cart')
+      const data = await res.json()
+      const items = data?.items ?? []
+      setCartCount(items.length)
+    } catch { setCartCount(0) }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     fetch('/api/auth/me')
       .then((r) => r.json())
-      .then((data) => { if (!cancelled) setUser(data.user) })
+      .then((data) => { if (!cancelled) { setUser(data.user); if (data.user) fetchCartCount() } })
       .catch(() => { if (!cancelled) setUser(null) })
     return () => { cancelled = true }
-  }, [])
+  }, [fetchCartCount])
+
+  useEffect(() => {
+    if (user === null || user === 'loading') return
+    const onFocus = () => fetchCartCount()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [user, fetchCartCount])
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md">
@@ -42,18 +60,32 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex">
-          {NAV.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={cn(
-                'text-sm tracking-wide text-muted-foreground transition-colors hover:text-foreground',
-                pathname === item.href && 'text-foreground',
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {NAV.map((item) => {
+            const isCart = item.label === 'Cart'
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={cn(
+                  'relative text-sm tracking-wide text-muted-foreground transition-colors hover:text-foreground',
+                  pathname === item.href && 'text-foreground',
+                )}
+              >
+                {isCart ? (
+                  <span className="flex items-center gap-1.5">
+                    <ShoppingCart className="size-4" />
+                    {cartCount > 0 && (
+                      <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                        {cartCount > 9 ? '9+' : cartCount}
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  item.label
+                )}
+              </Link>
+            )
+          })}
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
@@ -75,16 +107,25 @@ export function SiteHeader() {
       {open && (
         <div className="border-t border-border/60 bg-background md:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4">
-            {NAV.map((item) => (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={() => setOpen(false)}
-                className="rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
-              >
-                {item.label}
-              </Link>
-            ))}
+            {NAV.map((item) => {
+              const isCart = item.label === 'Cart'
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-2 rounded-md px-2 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground"
+                >
+                  {isCart && <ShoppingCart className="size-4" />}
+                  {item.label}
+                  {isCart && cartCount > 0 && (
+                    <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                      {cartCount > 9 ? '9+' : cartCount}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
             <div className="mt-2 flex items-center gap-2">
               <ThemeToggle />
               {isLoggedIn ? (
