@@ -5,12 +5,15 @@ import Link from 'next/link'
 import { LogOut, User, Settings, BookOpen, ShoppingCart, UserCog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
+import { getDisplayName } from '@/lib/utils'
 
 interface AuthUser {
   id: string
   name: string
   email: string
   isAdmin: boolean
+  username?: string
+  showFullName?: boolean
 }
 
 export function AuthButtons({ user }: { user: AuthUser | null | 'loading' }) {
@@ -29,6 +32,7 @@ export function AuthButtons({ user }: { user: AuthUser | null | 'loading' }) {
   }
 
   if (user) {
+    const displayName = getDisplayName(user)
     return (
       <div className="relative">
         <button
@@ -37,16 +41,16 @@ export function AuthButtons({ user }: { user: AuthUser | null | 'loading' }) {
           className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary"
         >
           <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-            {user.name.charAt(0).toUpperCase()}
+            {displayName.charAt(0).toUpperCase()}
           </span>
-          <span className="hidden sm:inline text-muted-foreground">{user.name}</span>
+          <span className="hidden sm:inline text-muted-foreground">{displayName}</span>
         </button>
         {menuOpen && (
           <>
             <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
             <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
               <div className="border-b border-border px-4 py-3">
-                <p className="text-sm font-medium text-foreground">{user.name}</p>
+                <p className="text-sm font-medium text-foreground">{displayName}</p>
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <div className="p-1.5">

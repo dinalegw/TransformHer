@@ -16,6 +16,7 @@
   <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat&logo=drizzle" alt="Drizzle"/>
   <img src="https://img.shields.io/badge/Paystack-00A3E0?style=flat&logo=paystack" alt="Paystack"/>
   <img src="https://img.shields.io/badge/ESLint-4B32C3?style=flat&logo=eslint" alt="ESLint"/>
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat" alt="MIT"/>
 </p>
 
 ---
@@ -27,12 +28,16 @@
 ```
 transformher/
 ├── app/            Next.js App Router (pages, API routes, auth)
-│   ├── api/        Backend API (auth, paystack)
+│   ├── api/        Backend API (auth, cart, paystack)
 │   ├── admin/      Admin dashboard
-│   ├── books/      eBook marketplace pages
-│   └── (auth)/     Auth pages (login, register)
+│   ├── books/      eBook marketplace & detail pages
+│   ├── cart/       Shopping cart
+│   ├── library/    My Library (purchased books)
+│   ├── profile/    Profile settings
+│   └── (auth)/     Auth pages (login, register, reset)
 ├── components/     Shared UI components
-├── lib/            Utilities, DB, auth, payments
+├── lib/            Utilities, DB, auth, cart, payments
+├── scripts/        DB migration & setup scripts
 └── public/         Static assets
 ```
 
@@ -41,49 +46,65 @@ transformher/
 | Layer | Tech |
 |-------|------|
 | **Frontend** | Next.js 16 · React 19 · TailwindCSS 4 · shadcn/ui |
-| **Backend** | Next.js API Routes · Drizzle ORM (in-memory) |
+| **Backend** | Next.js API Routes · Drizzle ORM · NeonDB (PostgreSQL) |
 | **Auth** | Custom (PBKDF2 + HMAC tokens) |
 | **Payments** | Paystack |
+| **Email** | Courier |
 | **Tooling** | TypeScript 5 · ESLint |
 
 ## ✦ Prerequisites
 
 - **Node.js** 18+ (uses [Next.js 16](https://nextjs.org))
-- **pnpm** — install via `npm install -g pnpm`
 
 ## ✦ Getting Started
 
 ```bash
 # install dependencies
-pnpm install
+npm install
 
-# copy environment variables
-cp .env.example .env.local
-
-# run the development server
-pnpm dev
+# create environment file
+# (see required variables below)
+# then run the development server
+npm run dev
 ```
 
 ## ✦ Scripts
 
 | Command | Description |
 |---------|-------------|
-| `pnpm dev` | Start dev server |
-| `pnpm build` | Production build |
-| `pnpm start` | Start production server |
-| `pnpm lint` | Run ESLint |
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build |
+| `npm start` | Start production server |
+| `npm run lint` | Run ESLint |
+| `npm run db:migrate` | Run DB migrations |
 
 ## ✦ Environment Variables
 
 ```env
-AUTH_SECRET=your-secret-key           # used for session tokens
-PAYSTACK_SECRET_KEY=sk_test_...       # Paystack secret key
-NEXT_PUBLIC_BASE_URL=http://localhost:3000  # your domain
+# Required
+AUTH_SECRET=your-secret-key              # HMAC secret for session tokens
+
+# Database (at least one required)
+POSTGRES_URL_NON_POOLING=postgres://...  # NeonDB connection string
+POSTGRES_URL=postgres://...              # Pooled connection (fallback)
+
+# Email (Courier)
+COURIER_API_KEY=ck_...                   # Courier API key
+COURIER_TEMPLATE_PASSWORD_RESET=...      # Password reset template ID
+COURIER_TEMPLATE_ORDER_CONFIRMATION=...  # Order confirmation template ID
+COURIER_TEMPLATE_ADMIN_ORDER=...         # Admin order notification template
+
+# Payments (Paystack)
+PAYSTACK_SECRET_KEY=sk_test_...          # Paystack secret key
+
+# Optional
+NEXT_PUBLIC_BASE_URL=http://localhost:3000  # Public-facing URL
+ADMIN_EMAIL=admin@example.com               # Admin notification email
 ```
 
 ## ✦ License
 
-**Private** — All rights reserved.
+This project is [MIT](LICENSE) licensed.
 
 ---
 

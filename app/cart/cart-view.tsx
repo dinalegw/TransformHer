@@ -30,6 +30,7 @@ export function CartView({
     try {
       const res = await fetch('/api/cart/checkout', { method: 'POST' })
       if (res.ok) {
+        window.dispatchEvent(new CustomEvent('cart-updated'))
         router.push('/library')
         router.refresh()
       }
@@ -43,6 +44,7 @@ export function CartView({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bookId }),
     })
+    window.dispatchEvent(new CustomEvent('cart-updated'))
     router.refresh()
   }
 

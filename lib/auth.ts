@@ -14,7 +14,9 @@ export interface AuthUser {
   isAdmin: boolean
   username?: string
   phone?: string
+  showFullName: boolean
 }
+
 
 interface StoredUser {
   id: string
@@ -24,6 +26,7 @@ interface StoredUser {
   isAdmin: boolean
   username?: string
   phone?: string
+  showFullName: boolean
 }
 
 interface AuthStore {
@@ -221,6 +224,7 @@ export async function createUser(
     email: normalizedEmail,
     passwordHash,
     isAdmin: false,
+    showFullName: false,
   }
 
   store.users.set(id, user)
@@ -341,6 +345,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       isAdmin: userTable.isAdmin,
       username: userTable.username,
       phone: userTable.phone,
+      showFullName: userTable.showFullName,
     })
       .from(userTable)
       .where(eq(userTable.id, userId))
@@ -355,6 +360,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       isAdmin: u.isAdmin ?? false,
       username: u.username ?? undefined,
       phone: u.phone ?? undefined,
+      showFullName: u.showFullName ?? false,
     }
   }
 
@@ -369,6 +375,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     isAdmin: user.isAdmin,
     username: user.username,
     phone: user.phone,
+    showFullName: user.showFullName ?? false,
   }
 }
 
@@ -430,7 +437,7 @@ export function updatePassword(email: string, newPassword: string): boolean {
 
 export async function updateUser(
   userId: string,
-  updates: { name?: string; email?: string; username?: string; phone?: string }
+  updates: { name?: string; email?: string; username?: string; phone?: string; showFullName?: boolean }
 ): Promise<boolean> {
   const normalizedEmail = updates.email ? normalizeEmail(updates.email) : undefined
   const db = getDb()
@@ -441,6 +448,7 @@ export async function updateUser(
     if (updates.email) setValues.email = normalizedEmail
     if (updates.username !== undefined) setValues.username = updates.username || null
     if (updates.phone !== undefined) setValues.phone = updates.phone || null
+    if (updates.showFullName !== undefined) setValues.showFullName = updates.showFullName
 
     if (Object.keys(setValues).length === 0) return true
 
@@ -456,6 +464,7 @@ export async function updateUser(
   if (updates.email) user.email = normalizedEmail!
   if (updates.username !== undefined) user.username = updates.username || undefined
   if (updates.phone !== undefined) user.phone = updates.phone || undefined
+  if (updates.showFullName !== undefined) user.showFullName = updates.showFullName
   persistStore()
   return true
 }
@@ -473,6 +482,7 @@ function seedAdminUser(): void {
     email: 'admin@transformher.com',
     passwordHash: ADMIN_HASH,
     isAdmin: true,
+    showFullName: false,
   }
   store.users.set(id, user)
   store.emailIndex.set('admin@transformher.com', id)

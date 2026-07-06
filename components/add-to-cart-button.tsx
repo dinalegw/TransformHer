@@ -40,13 +40,17 @@ export function AddToCartButton({
           body: JSON.stringify({ bookId }),
         })
         setState('idle')
+        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { bookId, inCart: false } }))
       } else {
         const res = await fetch('/api/cart', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bookId }),
         })
-        if (res.ok) setState('in-cart')
+        if (res.ok) {
+          setState('in-cart')
+          window.dispatchEvent(new CustomEvent('cart-updated', { detail: { bookId, inCart: true } }))
+        }
       }
     } catch {}
     setLoading(false)

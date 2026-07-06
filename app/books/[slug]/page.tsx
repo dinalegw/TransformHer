@@ -15,7 +15,7 @@ import { formatPrice } from '@/lib/format'
 import { getCurrentUser } from '@/lib/auth'
 import { verifyPaystackPayment } from '@/lib/paystack'
 import { sendOrderConfirmation, sendAdminOrderNotification } from '@/lib/email'
-import { getLibraryItem, addToLibrary, fetchLibrary } from '@/lib/library'
+import { getCartItem, getLibraryItem, addToLibrary, fetchLibrary } from '@/lib/library'
 
 export async function generateMetadata({
   params,
@@ -46,6 +46,7 @@ export default async function BookDetailPage({
   const user = await getCurrentUser()
   const ownedItem = user ? await getLibraryItem(user.id, book.id) : null
   const isOwned = !!ownedItem
+  const inCart = user ? !!(await getCartItem(user.id, book.id)) : false
   let alreadyOwned = false
 
   if (purchased === 'true') {
@@ -183,10 +184,8 @@ export default async function BookDetailPage({
                   <div className="flex flex-1 flex-wrap gap-3">
                     {user ? (
                       <PaystackButton
-                        bookSlug={book.slug}
-                        bookTitle={book.title}
-                        amount={Number(book.price)}
-                        email={user.email}
+                        bookId={book.id}
+                        inCart={inCart}
                       />
                     ) : (
                       <Button asChild size="lg" className="rounded-full px-8">

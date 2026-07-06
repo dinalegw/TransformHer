@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
+  const [showFullName, setShowFullName] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
@@ -30,6 +31,7 @@ export default function ProfilePage() {
         setEmail(data.user.email || '')
         setUsername(data.user.username || '')
         setPhone(data.user.phone || '')
+        setShowFullName(data.user.showFullName ?? false)
       })
       .catch(() => router.push('/login'))
       .finally(() => setFetching(false))
@@ -44,7 +46,7 @@ export default function ProfilePage() {
       const res = await fetch('/api/auth/me', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, username, phone }),
+        body: JSON.stringify({ name, username, phone, showFullName }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -139,6 +141,19 @@ export default function ProfilePage() {
                 className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                 placeholder="Optional"
               />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                id="showFullName"
+                type="checkbox"
+                checked={showFullName}
+                onChange={e => setShowFullName(e.target.checked)}
+                className="size-4 rounded border-input accent-primary"
+              />
+              <label htmlFor="showFullName" className="text-sm text-muted-foreground">
+                Show my full name instead of username
+              </label>
             </div>
 
             <Button type="submit" disabled={loading} className="rounded-full">

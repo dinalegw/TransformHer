@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useCallback } from 'react'
 import { Menu, X, ShoppingCart } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, getDisplayName } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AuthButtons } from '@/components/auth-buttons'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -22,7 +22,7 @@ const NAV = [
 export function SiteHeader() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [user, setUser] = useState<{ id: string; name: string; email: string; isAdmin: boolean } | null | 'loading'>('loading')
+  const [user, setUser] = useState<{ id: string; name: string; email: string; isAdmin: boolean; username?: string; showFullName?: boolean } | null | 'loading'>('loading')
   const isLoggedIn = user !== null && user !== 'loading'
 
   const [cartCount, setCartCount] = useState(0)
@@ -48,8 +48,13 @@ export function SiteHeader() {
   useEffect(() => {
     if (user === null || user === 'loading') return
     const onFocus = () => fetchCartCount()
+    const onCartUpdate = () => fetchCartCount()
     window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
+    window.addEventListener('cart-updated', onCartUpdate)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('cart-updated', onCartUpdate)
+    }
   }, [user, fetchCartCount])
 
   return (
@@ -131,7 +136,7 @@ export function SiteHeader() {
               {isLoggedIn ? (
                 <>
                   <span className="flex-1 rounded-md px-2 py-2 text-sm text-muted-foreground">
-                    {user!.name}
+                    {getDisplayName(user!)}
                   </span>
                   <Button asChild variant="ghost" size="sm" className="rounded-full">
                     <Link href="/api/auth/logout" onClick={(e) => { e.preventDefault(); fetch('/api/auth/logout', { method: 'POST' }).then(() => { setOpen(false); window.location.href = '/' }) }}>

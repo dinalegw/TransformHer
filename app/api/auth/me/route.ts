@@ -13,9 +13,9 @@ export async function PUT(req: Request) {
 
   try {
     const body = await req.json()
-    const { name, username, phone } = body
+    const { name, username, phone, showFullName } = body
 
-    await updateUser(user.id, { name, username, phone })
+    await updateUser(user.id, { name, username, phone, showFullName })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error('Update profile failed:', err)

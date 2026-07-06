@@ -22,6 +22,7 @@ export const user = pgTable('user', {
   isAdmin: boolean('is_admin').notNull().default(false),
   username: text('username'),
   phone: text('phone'),
+  showFullName: boolean('show_full_name').notNull().default(false),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

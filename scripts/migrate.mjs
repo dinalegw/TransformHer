@@ -26,9 +26,24 @@ async function migrate() {
         image TEXT,
         password_hash TEXT,
         is_admin BOOLEAN NOT NULL DEFAULT false,
+        username TEXT,
+        phone TEXT,
+        show_full_name BOOLEAN NOT NULL DEFAULT false,
         "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
       );
+    `)
+
+    await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS username TEXT;
+    `)
+
+    await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS phone TEXT;
+    `)
+
+    await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS show_full_name BOOLEAN NOT NULL DEFAULT false;
     `)
 
     await client.query(`

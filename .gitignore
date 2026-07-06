@@ -21,3 +21,4 @@ coverage
 pnpm-lock.yaml
 
 data/
+.env*
