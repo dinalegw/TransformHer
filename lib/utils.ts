@@ -13,3 +13,9 @@ export function getDisplayName(user: {
   if (user.showFullName || !user.username) return user.name
   return user.username
 }
+
+export function getBaseUrl(): string {
+  const vercelUrl = process.env.VERCEL_URL
+  if (vercelUrl) return `https://${vercelUrl}`
+  return process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+}

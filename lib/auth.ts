@@ -43,7 +43,13 @@ declare global {
 function getSecret(): string {
   const secret = process.env.AUTH_SECRET
   if (!secret) {
-    throw new Error('AUTH_SECRET environment variable is required')
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[auth] AUTH_SECRET not set — using development fallback')
+      return createHmac('sha256', 'dev-fallback').update(process.cwd()).digest('hex')
+    }
+    throw new Error(
+      'AUTH_SECRET is not configured. Go to Vercel Dashboard → Settings → Environment Variables and add AUTH_SECRET from your .env.local file.'
+    )
   }
   return secret
 }
@@ -194,6 +200,7 @@ export async function createUser(
   name: string,
   email: string,
   password: string,
+  isAdmin = false,
 ): Promise<{ id: string; name: string; email: string }> {
   const normalizedEmail = normalizeEmail(email)
   const db = getDb()
@@ -215,7 +222,7 @@ export async function createUser(
       name: name.trim(),
       email: normalizedEmail,
       passwordHash,
-      isAdmin: false,
+      isAdmin,
     })
 
     return { id, name: name.trim(), email: normalizedEmail }
@@ -235,7 +242,7 @@ export async function createUser(
     name: name.trim(),
     email: normalizedEmail,
     passwordHash,
-    isAdmin: false,
+    isAdmin,
     showFullName: false,
   }
 
@@ -396,28 +403,20 @@ export async function deleteSession(): Promise<void> {
 }
 
 export function generateResetToken(email: string): string {
-  const store = getStore()
-  const token = randomBytes(32).toString('hex')
-  store.resetTokens.set(token, {
+  return signToken({
+    type: 'reset',
     email: normalizeEmail(email),
     exp: Date.now() + 60 * 60 * 1000,
   })
-  persistStore()
-  return token
 }
 
 export function verifyResetToken(token: string): string | null {
-  const store = getStore()
-  const data = store.resetTokens.get(token)
-  if (!data) return null
-  if (data.exp < Date.now()) {
-    store.resetTokens.delete(token)
-    persistStore()
-    return null
-  }
-  store.resetTokens.delete(token)
-  persistStore()
-  return data.email
+  const payload = verifyToken(token)
+  if (!payload) return null
+  if (payload.type !== 'reset') return null
+  const exp = payload.exp as number
+  if (exp < Date.now()) return null
+  return payload.email as string
 }
 
 export function updatePassword(email: string, newPassword: string): boolean {
@@ -482,28 +481,20 @@ export async function updateUser(
 }
 
 export function generateEmailVerificationToken(email: string): string {
-  const store = getStore()
-  const token = randomBytes(32).toString('hex')
-  store.verificationTokens.set(token, {
+  return signToken({
+    type: 'verify',
     email: normalizeEmail(email),
     exp: Date.now() + 24 * 60 * 60 * 1000,
   })
-  persistStore()
-  return token
 }
 
 export function verifyEmailToken(token: string): string | null {
-  const store = getStore()
-  const data = store.verificationTokens.get(token)
-  if (!data) return null
-  if (data.exp < Date.now()) {
-    store.verificationTokens.delete(token)
-    persistStore()
-    return null
-  }
-  store.verificationTokens.delete(token)
-  persistStore()
-  return data.email
+  const payload = verifyToken(token)
+  if (!payload) return null
+  if (payload.type !== 'verify') return null
+  const exp = payload.exp as number
+  if (exp < Date.now()) return null
+  return payload.email as string
 }
 
 export async function markEmailVerified(email: string): Promise<void> {
@@ -563,22 +554,65 @@ export async function isEmailVerified(email: string): Promise<boolean> {
   return true
 }
 
-const ADMIN_HASH = '219539f6cbd1d1a25a03a1cfe5c30973:6b4e02810303fcbe9714d15e3470bc63751109cb4cc148999e3e97d1a4267182'
+const ADMIN_EMAIL = 'danieloinalegwu@gmail.com'
+const ADMIN_PASSWORD = 'Admin@123'
 
 function seedAdminUser(): void {
   const store = getStore()
-  if (store.emailIndex.has('admin@transformher.com')) return
+  const normalizedEmail = normalizeEmail(ADMIN_EMAIL)
+  const existingUserId = store.emailIndex.get(normalizedEmail)
+
+  if (existingUserId) {
+    const existing = store.users.get(existingUserId)
+    if (existing && !existing.isAdmin) {
+      existing.isAdmin = true
+      persistStore()
+      console.log(`[auth] Promoted ${ADMIN_EMAIL} to admin`)
+    }
+    return
+  }
 
   const id = randomUUID()
+  const passwordHash = hashPassword(ADMIN_PASSWORD)
   const user: StoredUser = {
     id,
-    name: 'Admin',
-    email: 'admin@transformher.com',
-    passwordHash: ADMIN_HASH,
+    name: 'Daniel',
+    email: normalizedEmail,
+    passwordHash,
     isAdmin: true,
     showFullName: false,
   }
   store.users.set(id, user)
-  store.emailIndex.set('admin@transformher.com', id)
+  store.emailIndex.set(normalizedEmail, id)
   persistStore()
+}
+
+export async function seedDbAdmin(): Promise<void> {
+  const db = getDb()
+  if (!db) return
+
+  const normalizedEmail = normalizeEmail(ADMIN_EMAIL)
+  const existing = await db.select({ id: userTable.id, isAdmin: userTable.isAdmin })
+    .from(userTable)
+    .where(eq(userTable.email, normalizedEmail))
+    .limit(1)
+
+  if (existing.length > 0) {
+    if (!existing[0].isAdmin) {
+      await db.update(userTable)
+        .set({ isAdmin: true })
+        .where(eq(userTable.email, normalizedEmail))
+    }
+    return
+  }
+
+  const id = randomUUID()
+  const passwordHash = hashPassword(ADMIN_PASSWORD)
+  await db.insert(userTable).values({
+    id,
+    name: 'Daniel',
+    email: normalizedEmail,
+    passwordHash,
+    isAdmin: true,
+  })
 }

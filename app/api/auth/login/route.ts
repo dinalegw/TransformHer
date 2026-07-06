@@ -27,7 +27,9 @@ export async function POST(req: Request) {
       path: '/',
     })
     return res
-  } catch {
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+  } catch (err) {
+    console.error('Login error:', err)
+    const message = err instanceof Error ? err.message : 'Something went wrong'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

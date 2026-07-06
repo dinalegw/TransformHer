@@ -4,6 +4,7 @@ import {
   validateEmail, validatePassword, validateName,
 } from '@/lib/auth'
 import { sendWelcomeVerificationEmail } from '@/lib/email'
+import { getBaseUrl } from '@/lib/utils'
 
 export async function POST(req: Request) {
   try {
@@ -30,9 +31,8 @@ export async function POST(req: Request) {
       path: '/',
     })
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
     const token = generateEmailVerificationToken(user.email)
-    const verifyLink = `${baseUrl}/verify-email?token=${token}`
+    const verifyLink = `${getBaseUrl()}/verify-email?token=${token}`
 
     try {
       await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)

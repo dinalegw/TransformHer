@@ -3,8 +3,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { fetchCart } from '@/lib/library'
 import { initializePaystackPayment } from '@/lib/paystack'
 import { SEED_BOOKS } from '@/lib/seed'
-
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+import { getBaseUrl } from '@/lib/utils'
 
 export async function POST() {
   const user = await getCurrentUser()
@@ -34,7 +33,7 @@ export async function POST() {
         bookSlugs: cartBooks.map(b => b.slug),
         bookTitles: cartBooks.map(b => b.title),
       },
-      callback_url: `${BASE_URL}/cart?purchased=true`,
+      callback_url: `${getBaseUrl()}/cart?purchased=true`,
     })
 
     if (!result.status) {

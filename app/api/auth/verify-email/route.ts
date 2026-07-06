@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { verifyEmailToken, markEmailVerified, getUserNameByEmail } from '@/lib/auth'
 import { sendEmailVerifiedEmail } from '@/lib/email'
+import { getBaseUrl } from '@/lib/utils'
 
 export async function GET(req: Request) {
   try {
@@ -19,8 +20,7 @@ export async function GET(req: Request) {
     const name = (await getUserNameByEmail(email)) ?? email.split('@')[0]
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
-      await sendEmailVerifiedEmail(email, name, `${baseUrl}/library`)
+      await sendEmailVerifiedEmail(email, name, `${getBaseUrl()}/library`)
     } catch (err) {
       console.error('Failed to send verified email:', err)
     }

@@ -12,6 +12,7 @@ function getConnectionUrl(): string | null {
 
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
 let _pool: Pool | null = null
+let _dbSeeded = false
 
 export function getDb() {
   if (_db) return _db
@@ -21,6 +22,12 @@ export function getDb() {
 
   _pool = new Pool({ connectionString: url, max: 1 })
   _db = drizzle(_pool, { schema })
+
+  if (!_dbSeeded) {
+    _dbSeeded = true
+    import('@/lib/auth').then(({ seedDbAdmin }) => seedDbAdmin()).catch(() => {})
+  }
+
   return _db
 }
 
