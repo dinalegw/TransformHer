@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { fetchLibrary, releasePendingBooks } from '@/lib/library'
 import { sendBookReleasedEmail } from '@/lib/email'
 import { SEED_BOOKS } from '@/lib/seed'
+import { getBaseUrl } from '@/lib/utils'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { LibraryGrid } from './library-grid'
@@ -27,7 +28,7 @@ export default async function LibraryPage() {
           user.email,
           user.name,
           book.title,
-          `${process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'}/books/${book.slug}`,
+          `${getBaseUrl()}/books/${book.slug}`,
         )
       } catch (err) {
         console.error('Failed to send release email:', err)

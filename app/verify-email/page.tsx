@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying')
@@ -76,5 +76,17 @@ export default function VerifyEmailPage() {
       </main>
       <SiteFooter />
     </div>
+  )
+}
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-svh items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-primary" />
+      </div>
+    }>
+      <VerifyEmailContent />
+    </Suspense>
   )
 }

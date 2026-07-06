@@ -46,8 +46,12 @@ export function PaystackButton({
       const data = await res.json()
       if (data.status && data.data?.authorization_url) {
         window.location.href = data.data.authorization_url
+        return
       }
-    } catch {}
+      console.error('Paystack init failed:', data)
+    } catch (err) {
+      console.error('Paystack init error:', err)
+    }
     setLoading(false)
   }
 

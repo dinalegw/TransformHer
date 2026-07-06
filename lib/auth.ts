@@ -419,17 +419,15 @@ export function verifyResetToken(token: string): string | null {
   return payload.email as string
 }
 
-export function updatePassword(email: string, newPassword: string): boolean {
+export async function updatePassword(email: string, newPassword: string): Promise<boolean> {
   const normalizedEmail = normalizeEmail(email)
   const db = getDb()
 
   if (db) {
     const passwordHash = hashPassword(newPassword)
-    db.update(userTable)
+    await db.update(userTable)
       .set({ passwordHash })
       .where(eq(userTable.email, normalizedEmail))
-      .then((result) => {})
-      .catch(() => {})
     return true
   }
 

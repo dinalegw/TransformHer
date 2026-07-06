@@ -14,9 +14,10 @@ export async function POST(req: Request) {
     if (!email) {
       return NextResponse.json({ error: 'Invalid or expired reset token' }, { status: 400 })
     }
-    updatePassword(email, password)
+    await updatePassword(email, password)
     return NextResponse.json({ message: 'Password updated successfully' })
-  } catch {
+  } catch (err) {
+    console.error('Reset password error:', err)
     return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
   }
 }

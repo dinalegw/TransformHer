@@ -25,7 +25,7 @@ export function CartView({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [checkingOut, setCheckingOut] = useState(false)
-  const [processingPayment, setProcessingPayment] = useState(false)
+  const [processingPayment, setProcessingPayment] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle')
   const processedRef = useRef(false)
 
   useEffect(() => {
@@ -33,7 +33,7 @@ export function CartView({
     const ref = searchParams.get('reference') ?? searchParams.get('trxref')
     if (purchased === 'true' && ref && !processedRef.current) {
       processedRef.current = true
-      setProcessingPayment(true)
+      setProcessingPayment('verifying')
       ;(async () => {
         try {
           const res = await fetch('/api/cart/checkout/confirm', {
@@ -45,8 +45,12 @@ export function CartView({
             window.dispatchEvent(new CustomEvent('cart-updated'))
             router.replace('/library')
             router.refresh()
+          } else {
+            setProcessingPayment('error')
           }
-        } catch {}
+        } catch {
+          setProcessingPayment('error')
+        }
       })()
     }
   }, [searchParams, router])
@@ -73,11 +77,23 @@ export function CartView({
     router.refresh()
   }
 
-  if (processingPayment) {
+  if (processingPayment === 'verifying') {
     return (
       <div className="flex flex-col items-center gap-4 py-20 text-center">
         <Loader2 className="size-10 animate-spin text-primary" />
         <p className="text-lg font-medium text-foreground">Verifying your payment...</p>
+      </div>
+    )
+  }
+
+  if (processingPayment === 'error') {
+    return (
+      <div className="flex flex-col items-center gap-4 py-20 text-center">
+        <p className="text-lg font-medium text-destructive">Payment verification failed</p>
+        <p className="text-sm text-muted-foreground">Please contact support with your payment reference.</p>
+        <Button asChild className="rounded-full">
+          <Link href="/library">Go to My Library</Link>
+        </Button>
       </div>
     )
   }
