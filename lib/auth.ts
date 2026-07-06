@@ -20,6 +20,8 @@ interface StoredUser {
   email: string
   passwordHash: string
   isAdmin: boolean
+  username?: string
+  phone?: string
 }
 
 interface AuthStore {

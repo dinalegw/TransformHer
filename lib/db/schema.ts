@@ -20,6 +20,8 @@ export const user = pgTable('user', {
   image: text('image'),
   passwordHash: text('password_hash'),
   isAdmin: boolean('is_admin').notNull().default(false),
+  username: text('username'),
+  phone: text('phone'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -88,3 +90,23 @@ export const books = pgTable('books', {
 })
 
 export type Book = typeof books.$inferSelect
+
+export const userPurchases = pgTable('user_purchases', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  bookId: integer('book_id').notNull().references(() => books.id, { onDelete: 'cascade' }),
+  bookSlug: text('book_slug').notNull(),
+  purchaseDate: timestamp('purchase_date').notNull().defaultNow(),
+  paymentReference: text('payment_reference'),
+})
+
+export type UserPurchase = typeof userPurchases.$inferSelect
+
+export const cart = pgTable('cart', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  bookId: integer('book_id').notNull().references(() => books.id, { onDelete: 'cascade' }),
+  addedAt: timestamp('added_at').notNull().defaultNow(),
+})
+
+export type CartItem = typeof cart.$inferSelect
