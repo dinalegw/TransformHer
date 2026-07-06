@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createUser, createSession, validateEmail, validatePassword, validateName } from '@/lib/auth'
+import {
+  createUser, createSession, generateEmailVerificationToken,
+  validateEmail, validatePassword, validateName,
+} from '@/lib/auth'
+import { sendWelcomeVerificationEmail } from '@/lib/email'
 
 export async function POST(req: Request) {
   try {
@@ -25,6 +29,17 @@ export async function POST(req: Request) {
       maxAge: 7 * 24 * 60 * 60,
       path: '/',
     })
+
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+    const token = generateEmailVerificationToken(user.email)
+    const verifyLink = `${baseUrl}/verify-email?token=${token}`
+
+    try {
+      await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
+    } catch (err) {
+      console.error('Failed to send welcome email:', err)
+    }
+
     return res
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Something went wrong'

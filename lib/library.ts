@@ -1,7 +1,7 @@
 import 'server-only'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, lte } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { userPurchases, cart as cartTable } from '@/lib/db/schema'
 import { SEED_BOOKS } from '@/lib/seed'
@@ -12,6 +12,8 @@ interface LibraryItem {
   bookId: number
   bookSlug: string
   purchaseDate: string
+  released: boolean
+  releaseAt: string | null
 }
 
 interface LibraryStore {
@@ -95,6 +97,8 @@ export async function fetchLibrary(userId: string): Promise<LibraryItem[]> {
       bookId: r.bookId,
       bookSlug: r.bookSlug,
       purchaseDate: r.purchaseDate.toISOString(),
+      released: r.released ?? false,
+      releaseAt: r.releaseAt ? r.releaseAt.toISOString() : null,
     }))
   }
   const store = getLibraryStore()
@@ -110,10 +114,11 @@ export async function getLibraryItem(userId: string, bookId: number): Promise<Li
       .limit(1)
     if (rows.length === 0) return null
     const r = rows[0]
-    return { id: r.id, userId: r.userId, bookId: r.bookId, bookSlug: r.bookSlug, purchaseDate: r.purchaseDate.toISOString() }
+    return { id: r.id, userId: r.userId, bookId: r.bookId, bookSlug: r.bookSlug, purchaseDate: r.purchaseDate.toISOString(), released: r.released ?? false, releaseAt: r.releaseAt ? r.releaseAt.toISOString() : null }
   }
   const store = getLibraryStore()
-  return store.items.find(i => i.userId === userId && i.bookId === bookId) ?? null
+  const item = store.items.find(i => i.userId === userId && i.bookId === bookId)
+  return item ?? null
 }
 
 export async function addToLibrary(userId: string, bookId: number, bookSlug: string): Promise<void> {
@@ -124,7 +129,7 @@ export async function addToLibrary(userId: string, bookId: number, bookSlug: str
       .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookId, bookId)))
       .limit(1)
     if (existing.length > 0) throw new Error('Book already in library')
-    await db.insert(userPurchases).values({ userId, bookId, bookSlug })
+    await db.insert(userPurchases).values({ userId, bookId, bookSlug, released: true, releaseAt: new Date() })
     return
   }
   const store = getLibraryStore()
@@ -138,8 +143,86 @@ export async function addToLibrary(userId: string, bookId: number, bookSlug: str
     bookId,
     bookSlug,
     purchaseDate: new Date().toISOString(),
+    released: true,
+    releaseAt: new Date().toISOString(),
   })
   saveLibraryStore(store)
+}
+
+export async function recordPurchase(userId: string, bookId: number, bookSlug: string, paymentReference?: string): Promise<void> {
+  const db = getDb()
+  const releaseAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+
+  if (db) {
+    const existing = await db.select({ id: userPurchases.id })
+      .from(userPurchases)
+      .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookId, bookId)))
+      .limit(1)
+    if (existing.length > 0) return
+    await db.insert(userPurchases).values({
+      userId, bookId, bookSlug, paymentReference,
+      released: false,
+      releaseAt,
+    })
+    return
+  }
+
+  const store = getLibraryStore()
+  if (store.items.some(i => i.userId === userId && i.bookId === bookId)) return
+  const maxId = store.items.reduce((max, i) => Math.max(max, i.id), 0)
+  store.items.push({
+    id: maxId + 1,
+    userId,
+    bookId,
+    bookSlug,
+    purchaseDate: new Date().toISOString(),
+    released: false,
+    releaseAt: releaseAt.toISOString(),
+  })
+  saveLibraryStore(store)
+}
+
+export async function releasePendingBooks(userId: string): Promise<LibraryItem[]> {
+  const now = new Date()
+  const released: LibraryItem[] = []
+  const db = getDb()
+
+  if (db) {
+    const pending = await db.select()
+      .from(userPurchases)
+      .where(and(
+        eq(userPurchases.userId, userId),
+        eq(userPurchases.released, false),
+        lte(userPurchases.releaseAt, now),
+      ))
+
+    for (const item of pending) {
+      await db.update(userPurchases)
+        .set({ released: true })
+        .where(eq(userPurchases.id, item.id))
+      released.push({
+        id: item.id,
+        userId: item.userId,
+        bookId: item.bookId,
+        bookSlug: item.bookSlug,
+        purchaseDate: item.purchaseDate.toISOString(),
+        released: true,
+        releaseAt: item.releaseAt ? item.releaseAt.toISOString() : null,
+      })
+    }
+    return released
+  }
+
+  const store = getLibraryStore()
+  const nowTs = now.toISOString()
+  for (const item of store.items) {
+    if (item.userId === userId && !item.released && item.releaseAt && item.releaseAt <= nowTs) {
+      item.released = true
+      released.push({ ...item })
+    }
+  }
+  if (released.length > 0) saveLibraryStore(store)
+  return released
 }
 
 export async function removeFromLibrary(userId: string, bookId: number): Promise<void> {
@@ -290,6 +373,8 @@ export async function checkoutCart(userId: string, paymentReference?: string): P
           bookId: item.bookId,
           bookSlug: slug,
           paymentReference,
+          released: true,
+          releaseAt: new Date(),
         })
       }
       await db.delete(cartTable)
@@ -312,6 +397,8 @@ export async function checkoutCart(userId: string, paymentReference?: string): P
         bookId: item.bookId,
         bookSlug: slug,
         purchaseDate: new Date().toISOString(),
+        released: true,
+        releaseAt: new Date().toISOString(),
       })
     }
   }

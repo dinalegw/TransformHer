@@ -1,4 +1,4 @@
-const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? 'sk_test_sample'
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY ?? ''
 const BASE = 'https://api.paystack.co'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
@@ -7,6 +7,7 @@ export async function initializePaystackPayment(params: {
   email: string
   amount: number
   reference: string
+  callback_url?: string
   metadata?: Record<string, unknown>
 }) {
   const res = await fetch(`${BASE}/transaction/initialize`, {
@@ -21,7 +22,7 @@ export async function initializePaystackPayment(params: {
       reference: params.reference,
       metadata: params.metadata,
       currency: 'NGN',
-      callback_url: `${BASE_URL}/books/${params.metadata?.bookSlug ?? ''}?purchased=true`,
+      callback_url: params.callback_url ?? `${BASE_URL}/books?purchased=true`,
     }),
   })
   return res.json()

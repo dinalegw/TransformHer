@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { verifyPaystackPayment } from '@/lib/paystack'
-import { sendOrderConfirmation, sendAdminOrderNotification } from '@/lib/email'
+import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
 import { getBookBySlug } from '@/lib/books'
 import { formatPrice } from '@/lib/format'
 
@@ -19,7 +19,10 @@ export async function POST(req: Request) {
       const book = bookSlug ? await getBookBySlug(bookSlug) : null
 
       if (customerEmail) {
-        await sendOrderConfirmation(customerEmail, bookTitle ?? 'your book', amount)
+        const customerName = result.data.customer?.first_name
+          ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
+          : 'Valued Customer'
+        await sendPurchaseConfirmation(customerEmail, customerName, bookTitle ?? 'your book', amount)
       }
 
       const adminEmail = process.env.ADMIN_EMAIL

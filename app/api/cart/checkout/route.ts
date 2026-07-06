@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
-import { fetchCart, checkoutCart } from '@/lib/library'
+import { fetchCart } from '@/lib/library'
+import { initializePaystackPayment } from '@/lib/paystack'
+import { SEED_BOOKS } from '@/lib/seed'
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
 
 export async function POST() {
   const user = await getCurrentUser()
@@ -12,8 +16,32 @@ export async function POST() {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
     }
 
-    await checkoutCart(user.id)
-    return NextResponse.json({ success: true })
+    const cartBooks = items
+      .map(i => SEED_BOOKS.find(b => b.id === i.bookId))
+      .filter((b): b is NonNullable<typeof b> => b != null)
+
+    const totalKobo = cartBooks.reduce((sum, b) => sum + Number(b.price), 0)
+
+    const reference = `CART-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
+    const result = await initializePaystackPayment({
+      email: user.email,
+      amount: totalKobo,
+      reference,
+      metadata: {
+        userId: user.id,
+        cartCheckout: true,
+        bookIds: cartBooks.map(b => b.id),
+        bookSlugs: cartBooks.map(b => b.slug),
+        bookTitles: cartBooks.map(b => b.title),
+      },
+      callback_url: `${BASE_URL}/cart?purchased=true`,
+    })
+
+    if (!result.status) {
+      return NextResponse.json({ error: result.message ?? 'Paystack initialization failed' }, { status: 502 })
+    }
+
+    return NextResponse.json({ authorization_url: result.data.authorization_url, reference })
   } catch (err) {
     console.error('Checkout failed:', err)
     return NextResponse.json({ error: 'Checkout failed' }, { status: 500 })

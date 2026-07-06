@@ -13,9 +13,7 @@ function getClient() {
 
 function getTemplate(key: string): string {
   const val = process.env[key]
-  if (!val) {
-    throw new Error(`${key} environment variable is required`)
-  }
+  if (!val) throw new Error(`${key} environment variable is required`)
   return val
 }
 
@@ -30,8 +28,31 @@ export async function sendPasswordResetEmail(to: string, resetLink: string) {
   })
 }
 
-export async function sendOrderConfirmation(
+export async function sendWelcomeVerificationEmail(to: string, name: string, verifyLink: string) {
+  const client = getClient()
+  await client.send.message({
+    message: {
+      to: { email: to },
+      template: getTemplate('COURIER_TEMPLATE_WELCOME_VERIFY'),
+      data: { name, verifyLink },
+    },
+  })
+}
+
+export async function sendEmailVerifiedEmail(to: string, name: string, libraryLink: string) {
+  const client = getClient()
+  await client.send.message({
+    message: {
+      to: { email: to },
+      template: getTemplate('COURIER_TEMPLATE_EMAIL_VERIFIED'),
+      data: { name, libraryLink },
+    },
+  })
+}
+
+export async function sendPurchaseConfirmation(
   to: string,
+  name: string,
   bookTitle: string,
   amount: string,
 ) {
@@ -40,7 +61,23 @@ export async function sendOrderConfirmation(
     message: {
       to: { email: to },
       template: getTemplate('COURIER_TEMPLATE_ORDER_CONFIRMATION'),
-      data: { bookTitle, amount },
+      data: { name, bookTitle, amount },
+    },
+  })
+}
+
+export async function sendBookReleasedEmail(
+  to: string,
+  name: string,
+  bookTitle: string,
+  libraryLink: string,
+) {
+  const client = getClient()
+  await client.send.message({
+    message: {
+      to: { email: to },
+      template: getTemplate('COURIER_TEMPLATE_BOOK_RELEASED'),
+      data: { name, bookTitle, libraryLink },
     },
   })
 }

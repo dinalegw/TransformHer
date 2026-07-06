@@ -1,5 +1,7 @@
+import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { fetchCart } from '@/lib/library'
 import { SEED_BOOKS } from '@/lib/seed'
@@ -45,7 +47,13 @@ export default async function CartPage() {
         </section>
 
         <section className="mx-auto max-w-3xl px-4 py-10 md:px-6">
-          <CartView items={cartItems} total={total} />
+          <Suspense fallback={
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          }>
+            <CartView items={cartItems} total={total} />
+          </Suspense>
         </section>
       </main>
       <SiteFooter />

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Trash2, ShoppingBag, ArrowRight } from 'lucide-react'
+import { Trash2, ShoppingBag, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/format'
 import type { SeedBook } from '@/lib/seed'
@@ -23,16 +23,41 @@ export function CartView({
   total: number
 }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [checkingOut, setCheckingOut] = useState(false)
+  const [processingPayment, setProcessingPayment] = useState(false)
+  const processedRef = useRef(false)
+
+  useEffect(() => {
+    const purchased = searchParams.get('purchased')
+    const ref = searchParams.get('reference') ?? searchParams.get('trxref')
+    if (purchased === 'true' && ref && !processedRef.current) {
+      processedRef.current = true
+      setProcessingPayment(true)
+      ;(async () => {
+        try {
+          const res = await fetch('/api/cart/checkout/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reference: ref }),
+          })
+          if (res.ok) {
+            window.dispatchEvent(new CustomEvent('cart-updated'))
+            router.replace('/library')
+            router.refresh()
+          }
+        } catch {}
+      })()
+    }
+  }, [searchParams, router])
 
   async function handleCheckout() {
     setCheckingOut(true)
     try {
       const res = await fetch('/api/cart/checkout', { method: 'POST' })
-      if (res.ok) {
-        window.dispatchEvent(new CustomEvent('cart-updated'))
-        router.push('/library')
-        router.refresh()
+      const data = await res.json()
+      if (data.authorization_url) {
+        window.location.href = data.authorization_url
       }
     } catch {}
     setCheckingOut(false)
@@ -46,6 +71,15 @@ export function CartView({
     })
     window.dispatchEvent(new CustomEvent('cart-updated'))
     router.refresh()
+  }
+
+  if (processingPayment) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-20 text-center">
+        <Loader2 className="size-10 animate-spin text-primary" />
+        <p className="text-lg font-medium text-foreground">Verifying your payment...</p>
+      </div>
+    )
   }
 
   if (items.length === 0) {

@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
-import { fetchLibrary } from '@/lib/library'
+import { fetchLibrary, releasePendingBooks } from '@/lib/library'
+import { sendBookReleasedEmail } from '@/lib/email'
 import { SEED_BOOKS } from '@/lib/seed'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -16,10 +17,31 @@ export default async function LibraryPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
+  const justReleased = await releasePendingBooks(user.id)
+
+  for (const item of justReleased) {
+    const book = SEED_BOOKS.find(b => b.id === item.bookId)
+    if (book) {
+      try {
+        await sendBookReleasedEmail(
+          user.email,
+          user.name,
+          book.title,
+          `${process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'}/books/${book.slug}`,
+        )
+      } catch (err) {
+        console.error('Failed to send release email:', err)
+      }
+    }
+  }
+
   const items = await fetchLibrary(user.id)
   const books = items
-    .map(i => SEED_BOOKS.find(b => b.id === i.bookId))
-    .filter((b): b is typeof SEED_BOOKS[number] => b != null)
+    .map(i => {
+      const book = SEED_BOOKS.find(b => b.id === i.bookId)
+      return book ? { ...i, book } : null
+    })
+    .filter((b): b is NonNullable<typeof b> => b != null)
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -38,7 +60,7 @@ export default async function LibraryPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <LibraryGrid books={books} />
+          <LibraryGrid items={books} />
         </section>
       </main>
       <SiteFooter />

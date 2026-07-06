@@ -33,6 +33,7 @@ interface AuthStore {
   users: Map<string, StoredUser>
   emailIndex: Map<string, string>
   resetTokens: Map<string, { email: string; exp: number }>
+  verificationTokens: Map<string, { email: string; exp: number }>
 }
 
 declare global {
@@ -60,6 +61,7 @@ function loadStore(): AuthStore {
     users: new Map(),
     emailIndex: new Map(),
     resetTokens: new Map(),
+    verificationTokens: new Map(),
   }
 
   try {
@@ -76,6 +78,11 @@ function loadStore(): AuthStore {
       if (Array.isArray(data.resetTokens)) {
         for (const t of data.resetTokens) {
           store.resetTokens.set(t.token, { email: t.email, exp: t.exp })
+        }
+      }
+      if (Array.isArray(data.verificationTokens)) {
+        for (const t of data.verificationTokens) {
+          store.verificationTokens.set(t.token, { email: t.email, exp: t.exp })
         }
       }
     }
@@ -95,6 +102,11 @@ function saveStore(store: AuthStore): void {
     const data = {
       users: Array.from(store.users.values()),
       resetTokens: Array.from(store.resetTokens.entries()).map(([token, value]) => ({
+        token,
+        email: value.email,
+        exp: value.exp,
+      })),
+      verificationTokens: Array.from(store.verificationTokens.entries()).map(([token, value]) => ({
         token,
         email: value.email,
         exp: value.exp,
@@ -466,6 +478,88 @@ export async function updateUser(
   if (updates.phone !== undefined) user.phone = updates.phone || undefined
   if (updates.showFullName !== undefined) user.showFullName = updates.showFullName
   persistStore()
+  return true
+}
+
+export function generateEmailVerificationToken(email: string): string {
+  const store = getStore()
+  const token = randomBytes(32).toString('hex')
+  store.verificationTokens.set(token, {
+    email: normalizeEmail(email),
+    exp: Date.now() + 24 * 60 * 60 * 1000,
+  })
+  persistStore()
+  return token
+}
+
+export function verifyEmailToken(token: string): string | null {
+  const store = getStore()
+  const data = store.verificationTokens.get(token)
+  if (!data) return null
+  if (data.exp < Date.now()) {
+    store.verificationTokens.delete(token)
+    persistStore()
+    return null
+  }
+  store.verificationTokens.delete(token)
+  persistStore()
+  return data.email
+}
+
+export async function markEmailVerified(email: string): Promise<void> {
+  const normalizedEmail = normalizeEmail(email)
+  const db = getDb()
+
+  if (db) {
+    await db.update(userTable)
+      .set({ emailVerified: true })
+      .where(eq(userTable.email, normalizedEmail))
+    return
+  }
+
+  const store = getStore()
+  const userId = store.emailIndex.get(normalizedEmail)
+  if (!userId) return
+  const user = store.users.get(userId)
+  if (user) {
+    ;(user as Record<string, unknown>).emailVerified = true
+    persistStore()
+  }
+}
+
+export async function getUserNameByEmail(email: string): Promise<string | null> {
+  const normalizedEmail = normalizeEmail(email)
+  const db = getDb()
+
+  if (db) {
+    const rows = await db.select({ name: userTable.name })
+      .from(userTable)
+      .where(eq(userTable.email, normalizedEmail))
+      .limit(1)
+    if (rows.length === 0) return null
+    return rows[0].name
+  }
+
+  const store = getStore()
+  const userId = store.emailIndex.get(normalizedEmail)
+  if (!userId) return null
+  const user = store.users.get(userId)
+  return user?.name ?? null
+}
+
+export async function isEmailVerified(email: string): Promise<boolean> {
+  const normalizedEmail = normalizeEmail(email)
+  const db = getDb()
+
+  if (db) {
+    const rows = await db.select({ emailVerified: userTable.emailVerified })
+      .from(userTable)
+      .where(eq(userTable.email, normalizedEmail))
+      .limit(1)
+    if (rows.length === 0) return false
+    return rows[0].emailVerified ?? false
+  }
+
   return true
 }
 

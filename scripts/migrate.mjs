@@ -47,6 +47,57 @@ async function migrate() {
     `)
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS books (
+        id SERIAL PRIMARY KEY,
+        slug TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL,
+        author TEXT NOT NULL,
+        category TEXT NOT NULL,
+        price NUMERIC(10,2) NOT NULL DEFAULT '0',
+        currency TEXT NOT NULL DEFAULT 'NGN',
+        cover_image TEXT NOT NULL,
+        tagline TEXT NOT NULL DEFAULT '',
+        description TEXT NOT NULL DEFAULT '',
+        rating NUMERIC(2,1) NOT NULL DEFAULT '5.0',
+        reviews_count INTEGER NOT NULL DEFAULT 0,
+        pages INTEGER NOT NULL DEFAULT 0,
+        featured BOOLEAN NOT NULL DEFAULT false,
+        bestseller BOOLEAN NOT NULL DEFAULT false,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `)
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_purchases (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+        book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        book_slug TEXT NOT NULL,
+        purchase_date TIMESTAMP NOT NULL DEFAULT NOW(),
+        payment_reference TEXT,
+        released BOOLEAN NOT NULL DEFAULT false,
+        release_at TIMESTAMP
+      );
+    `)
+
+    await client.query(`
+      ALTER TABLE user_purchases ADD COLUMN IF NOT EXISTS released BOOLEAN NOT NULL DEFAULT false;
+    `)
+
+    await client.query(`
+      ALTER TABLE user_purchases ADD COLUMN IF NOT EXISTS release_at TIMESTAMP;
+    `)
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cart (
+        id SERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+        book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+        added_at TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `)
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS "session" (
         id TEXT PRIMARY KEY,
         expires_at TIMESTAMP NOT NULL,

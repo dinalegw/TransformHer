@@ -1,18 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { ShoppingCart, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export function PaystackButton({
   bookId,
+  bookSlug,
   inCart: initialInCart,
 }: {
   bookId: number
+  bookSlug: string
   inCart?: boolean
 }) {
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [inCart, setInCart] = useState(initialInCart ?? false)
 
@@ -33,19 +33,19 @@ export function PaystackButton({
 
   async function handleClick() {
     if (inCart) {
-      router.push('/cart')
+      window.location.href = '/cart'
       return
     }
     setLoading(true)
     try {
-      const res = await fetch('/api/cart', {
+      const res = await fetch('/api/paystack/initialize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId }),
+        body: JSON.stringify({ bookSlug }),
       })
-      if (res.ok) {
-        window.dispatchEvent(new CustomEvent('cart-updated', { detail: { bookId } }))
-        router.push('/cart')
+      const data = await res.json()
+      if (data.status && data.data?.authorization_url) {
+        window.location.href = data.data.authorization_url
       }
     } catch {}
     setLoading(false)
@@ -59,7 +59,7 @@ export function PaystackButton({
       disabled={loading}
     >
       {inCart ? <ArrowRight className="size-4" /> : <ShoppingCart className="size-4" />}
-      {loading ? 'Processing...' : inCart ? 'View in Cart' : 'Buy & Read Now'}
+      {loading ? 'Redirecting...' : inCart ? 'View in Cart' : 'Buy & Read Now'}
     </Button>
   )
 }

@@ -14,8 +14,8 @@ import { getBookBySlug, getRelatedBooks } from '@/lib/books'
 import { formatPrice } from '@/lib/format'
 import { getCurrentUser } from '@/lib/auth'
 import { verifyPaystackPayment } from '@/lib/paystack'
-import { sendOrderConfirmation, sendAdminOrderNotification } from '@/lib/email'
-import { getCartItem, getLibraryItem, addToLibrary, fetchLibrary } from '@/lib/library'
+import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
+import { getCartItem, getLibraryItem, recordPurchase, fetchLibrary } from '@/lib/library'
 
 export async function generateMetadata({
   params,
@@ -58,19 +58,22 @@ export default async function BookDetailPage({
           const { userId: purchaseUserId, bookTitle } = result.data.metadata
           const customerEmail = result.data.customer?.email ?? ''
           const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
+          const customerName = result.data.customer?.first_name
+            ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
+            : 'Valued Customer'
 
           const purchaserId = purchaseUserId as string | undefined
           if (purchaserId && user) {
             const existing = await getLibraryItem(purchaserId, book.id)
             if (!existing) {
-              await addToLibrary(purchaserId, book.id, book.slug)
+              await recordPurchase(purchaserId, book.id, book.slug, ref)
             } else {
               alreadyOwned = true
             }
           }
 
           if (customerEmail) {
-            await sendOrderConfirmation(customerEmail, bookTitle ?? book.title, amount)
+            await sendPurchaseConfirmation(customerEmail, customerName, bookTitle ?? book.title, amount)
           }
 
           const adminEmail = process.env.ADMIN_EMAIL
@@ -78,9 +81,7 @@ export default async function BookDetailPage({
             await sendAdminOrderNotification(
               adminEmail,
               customerEmail,
-              result.data.customer?.first_name
-                ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
-                : 'Customer',
+              customerName,
               bookTitle ?? book.title,
               amount,
             )
@@ -111,7 +112,7 @@ export default async function BookDetailPage({
             <div className="mb-8 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-800">
               {alreadyOwned
                 ? <><strong>{book.title}</strong> is already in your library.</>
-                : <>Thank you for your purchase! You now own <strong>{book.title}</strong>.</>}
+                : <>Thank you for your purchase! <strong>{book.title}</strong> will be unlocked in your library within 72 hours. You&apos;ll receive an email once it&apos;s ready.</>}
             </div>
           )}
 
@@ -185,6 +186,7 @@ export default async function BookDetailPage({
                     {user ? (
                       <PaystackButton
                         bookId={book.id}
+                        bookSlug={book.slug}
                         inCart={inCart}
                       />
                     ) : (
@@ -201,7 +203,7 @@ export default async function BookDetailPage({
 
               <ul className="mt-8 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
                 {[
-                  'Instant access after purchase',
+                  'Unlocked within 72 hours of purchase',
                   'Read on any device',
                   'Lifetime ownership',
                   'Bookmarks & highlights',

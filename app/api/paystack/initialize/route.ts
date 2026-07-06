@@ -4,6 +4,8 @@ import { initializePaystackPayment } from '@/lib/paystack'
 import { getBookBySlug } from '@/lib/books'
 import { getLibraryItem } from '@/lib/library'
 
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+
 export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -25,6 +27,7 @@ export async function POST(req: Request) {
     amount: Number(book.price),
     reference,
     metadata: { userId: user.id, bookSlug, bookTitle: book.title },
+    callback_url: `${BASE_URL}/books/${bookSlug}?purchased=true`,
   })
 
   return NextResponse.json(result)

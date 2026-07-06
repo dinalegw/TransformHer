@@ -77,6 +77,7 @@ npm run dev
 | `npm start` | Start production server |
 | `npm run lint` | Run ESLint |
 | `npm run db:migrate` | Run DB migrations |
+| `node scripts/setup-templates.mjs` | Create/update Courier email templates |
 
 ## ✦ Environment Variables
 
@@ -89,10 +90,13 @@ POSTGRES_URL_NON_POOLING=postgres://...  # NeonDB connection string
 POSTGRES_URL=postgres://...              # Pooled connection (fallback)
 
 # Email (Courier)
-COURIER_API_KEY=ck_...                   # Courier API key
-COURIER_TEMPLATE_PASSWORD_RESET=...      # Password reset template ID
-COURIER_TEMPLATE_ORDER_CONFIRMATION=...  # Order confirmation template ID
-COURIER_TEMPLATE_ADMIN_ORDER=...         # Admin order notification template
+COURIER_API_KEY=pk_...                    # Courier API key
+COURIER_TEMPLATE_PASSWORD_RESET=...       # Password reset template ID
+COURIER_TEMPLATE_WELCOME_VERIFY=...       # Welcome + verification template ID
+COURIER_TEMPLATE_EMAIL_VERIFIED=...       # Email verified confirmation template ID
+COURIER_TEMPLATE_ORDER_CONFIRMATION=...   # Purchase confirmation (72h unlock) template ID
+COURIER_TEMPLATE_BOOK_RELEASED=...        # Book released notification template ID
+COURIER_TEMPLATE_ADMIN_ORDER=...          # Admin order notification template ID
 
 # Payments (Paystack)
 PAYSTACK_SECRET_KEY=sk_test_...          # Paystack secret key

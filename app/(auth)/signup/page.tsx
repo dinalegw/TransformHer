@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { UserPlus, Eye, EyeOff } from 'lucide-react'
+import { UserPlus, Eye, EyeOff, CheckCircle2, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -16,6 +16,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [done, setDone] = useState(false)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -38,14 +39,55 @@ export default function SignupPage() {
       if (!res.ok) {
         setError(data.error || 'Registration failed')
       } else {
-        router.push('/books')
-        router.refresh()
+        setDone(true)
       }
     } catch {
       setError('Something went wrong')
     } finally {
       setLoading(false)
     }
+  }
+
+  if (done) {
+    return (
+      <div className="flex min-h-svh flex-col">
+        <SiteHeader />
+        <main className="flex flex-1 items-center justify-center px-4 py-16">
+          <div className="w-full max-w-sm text-center">
+            <CheckCircle2 className="mx-auto size-16 text-green-500" />
+            <h1 className="mt-4 font-heading text-3xl text-foreground">
+              Congratulations!
+            </h1>
+            <p className="mt-2 text-lg text-foreground/90">
+              Your account has been created successfully.
+            </p>
+            <div className="mt-6 rounded-xl border border-border bg-card p-5 text-left">
+              <div className="flex items-start gap-3">
+                <Mail className="mt-0.5 size-5 text-primary shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">Check your inbox</p>
+                  <p className="mt-1">
+                    We sent a verification email to <strong>{email}</strong>.
+                    Click the link in the email to verify your account and activate
+                    your membership.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-8 flex flex-col gap-3">
+              <Button asChild className="rounded-full px-8">
+                <Link href="/books">Start exploring</Link>
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                You&apos;re already signed in. Visit your{' '}
+                <Link href="/profile" className="text-primary hover:underline">profile</Link> anytime.
+              </p>
+            </div>
+          </div>
+        </main>
+        <SiteFooter />
+      </div>
+    )
   }
 
   return (
@@ -110,7 +152,7 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-9 w-full rounded-lg border border-input bg-transparent px-3 pr-10 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  placeholder="At least 6 characters"
+                  placeholder="At least 8 characters"
                 />
                 <button
                   type="button"

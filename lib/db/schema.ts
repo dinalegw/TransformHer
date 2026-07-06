@@ -99,6 +99,8 @@ export const userPurchases = pgTable('user_purchases', {
   bookSlug: text('book_slug').notNull(),
   purchaseDate: timestamp('purchase_date').notNull().defaultNow(),
   paymentReference: text('payment_reference'),
+  released: boolean('released').notNull().default(false),
+  releaseAt: timestamp('release_at'),
 })
 
 export type UserPurchase = typeof userPurchases.$inferSelect
