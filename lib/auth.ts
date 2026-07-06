@@ -12,6 +12,8 @@ export interface AuthUser {
   name: string
   email: string
   isAdmin: boolean
+  username?: string
+  phone?: string
 }
 
 interface StoredUser {
@@ -328,11 +330,45 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   const exp = payload.exp as number
   if (exp < Date.now()) return null
 
+  const userId = payload.userId as string
+
+  const db = getDb()
+  if (db) {
+    const rows = await db.select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      isAdmin: userTable.isAdmin,
+      username: userTable.username,
+      phone: userTable.phone,
+    })
+      .from(userTable)
+      .where(eq(userTable.id, userId))
+      .limit(1)
+
+    if (rows.length === 0) return null
+    const u = rows[0]
+    return {
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      isAdmin: u.isAdmin ?? false,
+      username: u.username ?? undefined,
+      phone: u.phone ?? undefined,
+    }
+  }
+
+  const store = getStore()
+  const user = store.users.get(userId)
+  if (!user) return null
+
   return {
-    id: payload.userId as string,
-    name: payload.name as string,
-    email: payload.email as string,
-    isAdmin: payload.isAdmin as boolean,
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    isAdmin: user.isAdmin,
+    username: user.username,
+    phone: user.phone,
   }
 }
 
@@ -388,6 +424,38 @@ export function updatePassword(email: string, newPassword: string): boolean {
   if (!user) return false
 
   user.passwordHash = hashPassword(newPassword)
+  persistStore()
+  return true
+}
+
+export async function updateUser(
+  userId: string,
+  updates: { name?: string; email?: string; username?: string; phone?: string }
+): Promise<boolean> {
+  const normalizedEmail = updates.email ? normalizeEmail(updates.email) : undefined
+  const db = getDb()
+
+  if (db) {
+    const setValues: Record<string, unknown> = {}
+    if (updates.name) setValues.name = updates.name.trim()
+    if (updates.email) setValues.email = normalizedEmail
+    if (updates.username !== undefined) setValues.username = updates.username || null
+    if (updates.phone !== undefined) setValues.phone = updates.phone || null
+
+    if (Object.keys(setValues).length === 0) return true
+
+    await db.update(userTable).set(setValues).where(eq(userTable.id, userId))
+    return true
+  }
+
+  const store = getStore()
+  const user = store.users.get(userId)
+  if (!user) return false
+
+  if (updates.name) user.name = updates.name.trim()
+  if (updates.email) user.email = normalizedEmail!
+  if (updates.username !== undefined) user.username = updates.username || undefined
+  if (updates.phone !== undefined) user.phone = updates.phone || undefined
   persistStore()
   return true
 }

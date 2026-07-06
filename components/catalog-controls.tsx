@@ -78,7 +78,7 @@ export function CatalogControls({
         </div>
         <Select
           value={sort}
-          onValueChange={(value) => pushParams({ sort: value })}
+          onValueChange={(value) => { if (value) pushParams({ sort: value }) }}
         >
           <SelectTrigger className="w-full sm:w-52" aria-label="Sort books">
             <SelectValue placeholder="Sort" />

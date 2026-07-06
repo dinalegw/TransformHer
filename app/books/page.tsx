@@ -4,6 +4,8 @@ import { SiteFooter } from '@/components/site-footer'
 import { BookCard } from '@/components/book-card'
 import { CatalogControls } from '@/components/catalog-controls'
 import { getAllBooks } from '@/lib/books'
+import { getCurrentUser } from '@/lib/auth'
+import { fetchLibrary } from '@/lib/library'
 
 export const metadata: Metadata = {
   title: 'The Library',
@@ -24,6 +26,8 @@ export default async function BooksPage({
   const sort = (params.sort as SortOption) ?? 'popular'
 
   const books = await getAllBooks({ q, category, sort })
+  const user = await getCurrentUser()
+  const ownedIds = user ? new Set((await fetchLibrary(user.id)).map(i => i.bookId)) : new Set<number>()
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -56,7 +60,7 @@ export default async function BooksPage({
           {books.length > 0 ? (
             <div className="mt-6 grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-4">
               {books.map((book) => (
-                <BookCard key={book.id} book={book} />
+                <BookCard key={book.id} book={book} owned={ownedIds.has(book.id)} />
               ))}
             </div>
           ) : (

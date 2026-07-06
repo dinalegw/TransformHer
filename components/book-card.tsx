@@ -1,10 +1,10 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { Star } from 'lucide-react'
+import { Star, BookOpen } from 'lucide-react'
 import type { Book } from '@/lib/db/schema'
 import { formatPrice } from '@/lib/format'
 
-export function BookCard({ book }: { book: Book }) {
+export function BookCard({ book, owned }: { book: Book; owned?: boolean }) {
   return (
     <Link
       href={`/books/${book.slug}`}
@@ -19,9 +19,14 @@ export function BookCard({ book }: { book: Book }) {
           sizes="(max-width: 768px) 45vw, 22vw"
           className="object-cover"
         />
-        {book.bestseller && (
+        {book.bestseller && !owned && (
           <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-[10px] font-medium uppercase tracking-luxe text-primary-foreground">
             Bestseller
+          </span>
+        )}
+        {owned && (
+          <span className="absolute left-3 top-3 rounded-full bg-green-600 px-3 py-1 text-[10px] font-medium uppercase tracking-luxe text-white">
+            Owned
           </span>
         )}
       </div>
@@ -36,9 +41,16 @@ export function BookCard({ book }: { book: Book }) {
         <p className="mt-0.5 text-sm text-muted-foreground">{book.author}</p>
 
         <div className="mt-3 flex items-center justify-between">
-          <span className="font-medium text-foreground">
-            {formatPrice(book.price, book.currency)}
-          </span>
+          {owned ? (
+            <span className="flex items-center gap-1.5 text-sm font-medium text-green-700">
+              <BookOpen className="size-4" />
+              Owned
+            </span>
+          ) : (
+            <span className="font-medium text-foreground">
+              {formatPrice(book.price, book.currency)}
+            </span>
+          )}
           <span className="flex items-center gap-1 text-sm text-muted-foreground">
             <Star className="size-3.5 fill-primary text-primary" />
             {Number(book.rating).toFixed(1)}

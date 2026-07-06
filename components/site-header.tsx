@@ -7,12 +7,16 @@ import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AuthButtons } from '@/components/auth-buttons'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 const NAV = [
   { href: '/', label: 'Home' },
   { href: '/books', label: 'The Library' },
   { href: '/books#categories', label: 'Categories' },
   { href: '/#about', label: 'About' },
+  { href: '/faq', label: 'FAQ' },
+  { href: '/library', label: 'My Library' },
+  { href: '/cart', label: 'Cart' },
 ]
 
 export function SiteHeader() {
@@ -52,7 +56,8 @@ export function SiteHeader() {
           ))}
         </nav>
 
-        <div className="hidden items-center gap-4 md:flex">
+        <div className="hidden items-center gap-2 md:flex">
+          <ThemeToggle />
           <AuthButtons user={user} />
         </div>
 
@@ -80,7 +85,8 @@ export function SiteHeader() {
                 {item.label}
               </Link>
             ))}
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex items-center gap-2">
+              <ThemeToggle />
               {isLoggedIn ? (
                 <>
                   <span className="flex-1 rounded-md px-2 py-2 text-sm text-muted-foreground">

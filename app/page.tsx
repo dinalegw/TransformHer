@@ -11,13 +11,17 @@ import {
   getCategoryCounts,
   getFeaturedBooks,
 } from '@/lib/books'
+import { getCurrentUser } from '@/lib/auth'
+import { fetchLibrary } from '@/lib/library'
 
 export default async function HomePage() {
-  const [featured, bestsellers, counts] = await Promise.all([
+  const [featured, bestsellers, counts, user] = await Promise.all([
     getFeaturedBooks(4),
     getBestsellers(1),
     getCategoryCounts(),
+    getCurrentUser(),
   ])
+  const ownedIds = user ? new Set((await fetchLibrary(user.id)).map(i => i.bookId)) : new Set<number>()
   const spotlight = bestsellers[0]
 
   return (
@@ -181,7 +185,7 @@ export default async function HomePage() {
           </div>
           <div className="mt-10 grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-4">
             {featured.map((book) => (
-              <BookCard key={book.id} book={book} />
+              <BookCard key={book.id} book={book} owned={ownedIds.has(book.id)} />
             ))}
           </div>
         </section>

@@ -4,7 +4,9 @@ let _client: Courier | null = null
 
 function getClient() {
   if (!_client) {
-    _client = new Courier({ apiKey: process.env.COURIER_API_KEY })
+    const apiKey = process.env.COURIER_API_KEY
+    if (!apiKey) throw new Error('COURIER_API_KEY is required')
+    _client = new Courier({ apiKey })
   }
   return _client
 }

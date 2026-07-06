@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { initializePaystackPayment } from '@/lib/paystack'
 import { getBookBySlug } from '@/lib/books'
+import { getLibraryItem } from '@/lib/library'
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -12,6 +13,11 @@ export async function POST(req: Request) {
 
   const book = await getBookBySlug(bookSlug)
   if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+
+  const alreadyOwned = await getLibraryItem(user.id, book.id)
+  if (alreadyOwned) {
+    return NextResponse.json({ error: 'You already own this book' }, { status: 409 })
+  }
 
   const reference = `TX-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
   const result = await initializePaystackPayment({

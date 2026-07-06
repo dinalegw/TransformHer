@@ -36,6 +36,11 @@ export function SiteFooter() {
                   About Us
                 </Link>
               </li>
+              <li>
+                <Link href="/faq" className="hover:text-primary">
+                  FAQ
+                </Link>
+              </li>
             </ul>
           </div>
 

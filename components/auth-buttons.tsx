@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, User, Settings } from 'lucide-react'
+import { LogOut, User, Settings, BookOpen, ShoppingCart, UserCog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 
@@ -50,6 +50,30 @@ export function AuthButtons({ user }: { user: AuthUser | null | 'loading' }) {
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
               <div className="p-1.5">
+                <Link
+                  href="/library"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <BookOpen className="size-4" />
+                  My Library
+                </Link>
+                <Link
+                  href="/cart"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <ShoppingCart className="size-4" />
+                  Cart
+                </Link>
+                <Link
+                  href="/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                >
+                  <UserCog className="size-4" />
+                  Profile
+                </Link>
                 {user.isAdmin && (
                   <Link
                     href="/admin"
