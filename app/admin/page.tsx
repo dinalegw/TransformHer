@@ -1,10 +1,10 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
-import { getAllBooks } from '@/lib/books'
-import { formatPrice } from '@/lib/format'
+import { getAllMergedBooks } from '@/lib/admin-books'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { AdminBookManager } from '@/components/admin-book-manager'
 
 export const metadata: Metadata = {
   title: 'Admin',
@@ -15,7 +15,7 @@ export default async function AdminPage() {
   const user = await getCurrentUser()
   if (!user || !user.isAdmin) redirect('/login')
 
-  const books = await getAllBooks()
+  const books = await getAllMergedBooks()
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -34,34 +34,7 @@ export default async function AdminPage() {
         </section>
 
         <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-          <div className="overflow-hidden rounded-xl border border-border">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-muted text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Title</th>
-                  <th className="px-4 py-3 font-medium">Author</th>
-                  <th className="px-4 py-3 font-medium">Category</th>
-                  <th className="px-4 py-3 font-medium">Price</th>
-                  <th className="px-4 py-3 font-medium">Rating</th>
-                  <th className="px-4 py-3 font-medium">Featured</th>
-                  <th className="px-4 py-3 font-medium">Bestseller</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {books.map((book) => (
-                  <tr key={book.id} className="transition-colors hover:bg-muted/50">
-                    <td className="px-4 py-3 font-medium text-foreground">{book.title}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{book.author}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{book.category}</td>
-                    <td className="px-4 py-3 text-foreground">{formatPrice(book.price, book.currency)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{Number(book.rating).toFixed(1)}</td>
-                    <td className="px-4 py-3">{book.featured ? <span className="text-green-600">Yes</span> : <span className="text-muted-foreground">No</span>}</td>
-                    <td className="px-4 py-3">{book.bestseller ? <span className="text-green-600">Yes</span> : <span className="text-muted-foreground">No</span>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <AdminBookManager books={books} />
         </section>
       </main>
       <SiteFooter />

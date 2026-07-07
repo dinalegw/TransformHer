@@ -127,7 +127,7 @@ function saveStore(store: AuthStore): void {
 function getStore(): AuthStore {
   if (!globalThis.__authStore) {
     globalThis.__authStore = loadStore()
-    seedAdminUser()
+    seedAdminUser(globalThis.__authStore)
   }
   return globalThis.__authStore
 }
@@ -560,8 +560,7 @@ function getAdminPassword(): string {
   return process.env.ADMIN_PASSWORD || 'Admin@123'
 }
 
-function seedAdminUser(): void {
-  const store = getStore()
+function seedAdminUser(store: AuthStore): void {
   const adminEmail = getAdminEmail()
   const normalizedEmail = normalizeEmail(adminEmail)
   const existingUserId = store.emailIndex.get(normalizedEmail)
@@ -570,7 +569,7 @@ function seedAdminUser(): void {
     const existing = store.users.get(existingUserId)
     if (existing && !existing.isAdmin) {
       existing.isAdmin = true
-      persistStore()
+      saveStore(store)
       console.log(`[auth] Promoted ${adminEmail} to admin`)
     }
     return
@@ -588,40 +587,51 @@ function seedAdminUser(): void {
   }
   store.users.set(id, user)
   store.emailIndex.set(normalizedEmail, id)
-  persistStore()
+  saveStore(store)
 }
 
+let _seedingDbAdmin = false
+
 export async function seedDbAdmin(): Promise<void> {
-  const db = getDb()
-  if (!db) return
+  if (_seedingDbAdmin) return
+  _seedingDbAdmin = true
 
-  const adminEmail = getAdminEmail()
-  const normalizedEmail = normalizeEmail(adminEmail)
-  const existing = await db.select({ id: userTable.id, isAdmin: userTable.isAdmin })
-    .from(userTable)
-    .where(eq(userTable.email, normalizedEmail))
-    .limit(1)
+  try {
+    const db = getDb()
+    if (!db) return
 
-  if (existing.length > 0) {
-    if (!existing[0].isAdmin) {
-      await db.update(userTable)
-        .set({ isAdmin: true })
-        .where(eq(userTable.email, normalizedEmail))
-      console.log(`[auth] Promoted ${adminEmail} to admin in DB`)
+    const adminEmail = getAdminEmail()
+    const normalizedEmail = normalizeEmail(adminEmail)
+    const existing = await db.select({ id: userTable.id, isAdmin: userTable.isAdmin })
+      .from(userTable)
+      .where(eq(userTable.email, normalizedEmail))
+      .limit(1)
+
+    if (existing.length > 0) {
+      if (!existing[0].isAdmin) {
+        await db.update(userTable)
+          .set({ isAdmin: true })
+          .where(eq(userTable.email, normalizedEmail))
+        console.log(`[auth] Promoted ${adminEmail} to admin in DB`)
+      }
+      return
     }
-    return
-  }
 
-  const id = randomUUID()
-  const passwordHash = hashPassword(getAdminPassword())
-  await db.insert(userTable).values({
-    id,
-    name: 'Admin',
-    email: normalizedEmail,
-    passwordHash,
-    isAdmin: true,
-  })
-  console.log(`[auth] Created admin user ${adminEmail} in DB`)
+    const id = randomUUID()
+    const passwordHash = hashPassword(getAdminPassword())
+    await db.insert(userTable).values({
+      id,
+      name: 'Admin',
+      email: normalizedEmail,
+      passwordHash,
+      isAdmin: true,
+    }).catch(() => {
+      // Race condition: another instance seeded first, that is fine
+    })
+    console.log(`[auth] Created admin user ${adminEmail} in DB`)
+  } finally {
+    _seedingDbAdmin = false
+  }
 }
 
 export async function requireAdmin(): Promise<AuthUser> {
