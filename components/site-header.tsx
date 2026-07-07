@@ -8,6 +8,7 @@ import { cn, getDisplayName } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { AuthButtons } from '@/components/auth-buttons'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { AdminNotifications } from '@/components/admin-notifications'
 
 const NAV = [
   { href: '/', label: 'Home' },
@@ -95,6 +96,7 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-2 md:flex">
           <ThemeToggle />
+          <AdminNotifications />
           <AuthButtons user={user} />
         </div>
 

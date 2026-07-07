@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/lib/auth'
 import { fetchLibrary, releasePendingBooks } from '@/lib/library'
+import { getAllMergedBooks } from '@/lib/admin-books'
 import { sendBookReleasedEmail } from '@/lib/email'
-import { SEED_BOOKS } from '@/lib/seed'
 import { getBaseUrl } from '@/lib/utils'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -20,8 +20,11 @@ export default async function LibraryPage() {
 
   const justReleased = await releasePendingBooks(user.id)
 
+  const allBooks = await getAllMergedBooks({ includeArchived: true })
+  const bookBySlug = new Map(allBooks.map((b) => [b.slug, b]))
+
   for (const item of justReleased) {
-    const book = SEED_BOOKS.find(b => b.id === item.bookId)
+    const book = bookBySlug.get(item.bookSlug)
     if (book) {
       try {
         await sendBookReleasedEmail(
@@ -36,10 +39,10 @@ export default async function LibraryPage() {
     }
   }
 
-  const items = await fetchLibrary(user.id)
+  const items = await fetchLibrary(user.id, true)
   const books = items
     .map(i => {
-      const book = SEED_BOOKS.find(b => b.id === i.bookId)
+      const book = bookBySlug.get(i.bookSlug)
       return book ? { ...i, book } : null
     })
     .filter((b): b is NonNullable<typeof b> => b != null)

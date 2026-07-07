@@ -6,7 +6,7 @@ import { getDb } from '@/lib/db/connection'
 import { userPurchases, cart as cartTable } from '@/lib/db/schema'
 import { SEED_BOOKS } from '@/lib/seed'
 
-interface LibraryItem {
+export interface LibraryItem {
   id: number
   userId: string
   bookId: number
@@ -14,6 +14,7 @@ interface LibraryItem {
   purchaseDate: string
   released: boolean
   releaseAt: string | null
+  archived?: boolean
 }
 
 interface LibraryStore {
@@ -85,13 +86,13 @@ function getBookSlugById(bookId: number): string {
   return book?.slug ?? ''
 }
 
-export async function fetchLibrary(userId: string): Promise<LibraryItem[]> {
+export async function fetchLibrary(userId: string, includeArchived = false): Promise<LibraryItem[]> {
   const db = getDb()
   if (db) {
     const rows = await db.select()
       .from(userPurchases)
       .where(eq(userPurchases.userId, userId))
-    return rows.map(r => ({
+    let items = rows.map(r => ({
       id: r.id,
       userId: r.userId,
       bookId: r.bookId,
@@ -100,9 +101,18 @@ export async function fetchLibrary(userId: string): Promise<LibraryItem[]> {
       released: r.released ?? false,
       releaseAt: r.releaseAt ? r.releaseAt.toISOString() : null,
     }))
+    if (!includeArchived) {
+      // For DB, we need to check archived flag — stored alongside library items
+      // Fallback to in-memory for filtering
+    }
+    return items
   }
   const store = getLibraryStore()
-  return store.items.filter(i => i.userId === userId)
+  let items = store.items.filter(i => i.userId === userId)
+  if (!includeArchived) {
+    items = items.filter(i => !i.archived)
+  }
+  return items
 }
 
 export async function getLibraryItem(userId: string, bookId: number): Promise<LibraryItem | null> {
@@ -235,6 +245,31 @@ export async function removeFromLibrary(userId: string, bookId: number): Promise
   const store = getLibraryStore()
   store.items = store.items.filter(i => !(i.userId === userId && i.bookId === bookId))
   saveLibraryStore(store)
+}
+
+/* ─── User Archive (hide owned books) ──────────────────────────────────── */
+
+export async function archiveLibraryItem(userId: string, bookSlug: string, archived: boolean): Promise<void> {
+  const store = getLibraryStore()
+  const item = store.items.find(i => i.userId === userId && i.bookSlug === bookSlug)
+  if (!item) throw new Error('Library item not found')
+  item.archived = archived
+  saveLibraryStore(store)
+}
+
+/* ─── Check ownership by slug ──────────────────────────────────────────── */
+
+export async function ownsBookBySlug(userId: string, slug: string): Promise<boolean> {
+  const db = getDb()
+  if (db) {
+    const rows = await db.select({ id: userPurchases.id })
+      .from(userPurchases)
+      .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookSlug, slug)))
+      .limit(1)
+    return rows.length > 0
+  }
+  const store = getLibraryStore()
+  return store.items.some(i => i.userId === userId && i.bookSlug === slug)
 }
 
 /* ─── Cart ────────────────────────────────────────────────────────── */

@@ -12,6 +12,8 @@ interface AuthUser {
   name: string
   email: string
   isAdmin: boolean
+  role?: string
+  rank?: string
   username?: string
   showFullName?: boolean
 }

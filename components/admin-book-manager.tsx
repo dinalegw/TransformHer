@@ -2,7 +2,7 @@
 
 import { useState, useCallback, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Edit, Trash2, X } from 'lucide-react'
+import { Plus, Edit, Trash2, X, Upload, Archive, ArchiveRestore, Loader2 } from 'lucide-react'
 import { formatPrice } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,7 @@ interface MergedBook {
   price: string
   currency: string
   coverImage: string
+  fileUrl?: string
   tagline: string
   description: string
   rating: string
@@ -32,17 +33,16 @@ interface MergedBook {
   pages: number
   featured: boolean
   bestseller: boolean
+  archived?: boolean
   createdAt: Date | string
   source: 'seed' | 'admin'
 }
 
-interface AdminBook extends MergedBook {
-  id: string
-  source: 'admin'
-}
-
 interface AdminBookManagerProps {
   books: MergedBook[]
+  userRole: string
+  userEmail: string
+  userName: string
 }
 
 type FormMode = 'create' | 'edit'
@@ -54,6 +54,7 @@ interface FormData {
   price: string
   currency: string
   coverImage: string
+  fileUrl?: string
   tagline: string
   description: string
   rating: string
@@ -81,16 +82,22 @@ const emptyForm: FormData = {
   slug: '',
 }
 
-export function AdminBookManager({ books }: AdminBookManagerProps) {
+export function AdminBookManager({ books, userRole, userEmail, userName }: AdminBookManagerProps) {
   const router = useRouter()
   const [modal, setModal] = useState<{ mode: FormMode; book?: MergedBook } | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null)
+
+  const isMaster = userRole === 'master_admin'
+  const needsPending = userRole === 'admin'
 
   const openCreate = useCallback(() => {
     setForm(emptyForm)
+    setUploadedFile(null)
     setModal({ mode: 'create' })
     setError('')
   }, [])
@@ -103,6 +110,7 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
       price: book.price,
       currency: book.currency,
       coverImage: book.coverImage,
+      fileUrl: book.fileUrl,
       tagline: book.tagline ?? '',
       description: book.description ?? '',
       rating: book.rating ?? '5.0',
@@ -112,36 +120,89 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
       bestseller: book.bestseller ?? false,
       slug: book.slug,
     })
+    setUploadedFile(book.fileUrl || null)
     setModal({ mode: 'edit', book })
     setError('')
   }, [])
 
   const closeModal = useCallback(() => {
     setModal(null)
+    setUploadedFile(null)
     setError('')
   }, [])
+
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setError('')
+
+    try {
+      const slug = form.slug
+      if (!slug) {
+        throw new Error('Please set a slug first')
+      }
+
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('slug', slug)
+
+      const res = await fetch('/api/admin/books/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Upload failed')
+
+      setUploadedFile(data.fileUrl)
+      setForm((prev) => ({ ...prev, fileUrl: data.fileUrl }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }, [form.slug])
 
   const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
 
+    const isSeedEdit = modal?.mode === 'edit' && modal?.book?.source === 'seed'
+
+    let url: string
+    let method: string
+
+    if (isSeedEdit || modal?.mode === 'create') {
+      url = '/api/admin/books'
+      method = 'POST'
+    } else {
+      url = `/api/admin/books/${(modal?.book as { id: string })?.id}`
+      method = 'PUT'
+    }
+
+    const payload = { ...form }
+
     try {
-      const url = modal?.mode === 'create'
-        ? '/api/admin/books'
-        : `/api/admin/books/${(modal?.book as AdminBook)?.id}`
-
-      const method = modal?.mode === 'create' ? 'POST' : 'PUT'
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong')
+      // If sub-admin and not master, submit as pending change
+      if (needsPending && method === 'POST' && modal?.mode === 'create') {
+        const res = await fetch('/api/admin/books', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Something went wrong')
+      } else {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Something went wrong')
       }
 
       closeModal()
@@ -151,34 +212,71 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
     } finally {
       setSaving(false)
     }
-  }, [modal, form, closeModal, router])
+  }, [modal, form, closeModal, router, needsPending])
 
-  const handleDelete = useCallback(async (book: MergedBook & { id: string }) => {
-    if (!confirm(`Delete "${book.title}"? This cannot be undone.`)) return
+  const handleDelete = useCallback(async (book: MergedBook) => {
+    if (!isMaster) {
+      setError('Only master admin can delete books')
+      return
+    }
+    if (!confirm(`Delete "${book.title}"? This removes it from the store but NOT from owners' libraries.`)) return
 
-    setDeleting(book.id)
+    setDeleting(String(book.id))
     setError('')
 
     try {
-      const res = await fetch(`/api/admin/books/${book.id}`, { method: 'DELETE' })
+      const params = new URLSearchParams()
+      params.set('source', book.source)
+      if (book.source === 'seed') params.set('slug', book.slug)
+
+      const res = await fetch(`/api/admin/books/${book.id}?${params.toString()}`, {
+        method: 'DELETE',
+      })
       const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.error || 'Something went wrong')
-      }
+      if (!res.ok) throw new Error(data.error || 'Something went wrong')
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
       setDeleting(null)
     }
+  }, [router, isMaster])
+
+  const handleArchive = useCallback(async (book: MergedBook, archived: boolean) => {
+    setError('')
+    try {
+      const res = await fetch('/api/admin/books', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug: book.slug,
+          archived,
+          title: book.title,
+          author: book.author,
+          category: book.category,
+          price: book.price,
+          currency: book.currency,
+          coverImage: book.coverImage,
+          tagline: book.tagline,
+          description: book.description,
+          rating: book.rating,
+          reviewsCount: book.reviewsCount,
+          pages: book.pages,
+          featured: book.featured,
+          bestseller: book.bestseller,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Operation failed')
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong')
+    }
   }, [router])
 
   const updateField = useCallback(<K extends keyof FormData>(key: K, value: FormData[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }))
   }, [])
-
-  const isAdminBook = (book: MergedBook): book is MergedBook & AdminBook =>
-    book.source === 'admin'
 
   return (
     <>
@@ -191,6 +289,7 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Showing {books.length} book{books.length !== 1 ? 's' : ''}
+          {!isMaster && <span className="ml-2 text-xs text-amber-600">(sub-admin — some actions restricted)</span>}
         </p>
         <Button onClick={openCreate} size="sm">
           <Plus className="size-4" />
@@ -207,15 +306,15 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
               <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Source</th>
-              <th className="px-4 py-3 font-medium">Featured</th>
-              <th className="px-4 py-3 font-medium">Bestseller</th>
+              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">File</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {books.map((book) => (
               <tr key={`${book.source}-${book.id}`} className="transition-colors hover:bg-muted/50">
-                <td className="max-w-48 truncate px-4 py-3 font-medium text-foreground">
+                <td className="max-w-40 truncate px-4 py-3 font-medium text-foreground">
                   {book.title}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{book.author}</td>
@@ -235,44 +334,56 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
                   </span>
                 </td>
                 <td className="px-4 py-3">
-                  {book.featured ? (
-                    <span className="text-green-600">Yes</span>
+                  {book.archived ? (
+                    <span className="text-xs text-amber-600">Archived</span>
                   ) : (
-                    <span className="text-muted-foreground">No</span>
+                    <span className="text-xs text-green-600">Active</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {book.bestseller ? (
-                    <span className="text-green-600">Yes</span>
+                  {book.fileUrl ? (
+                    <span className="text-xs text-green-600">Uploaded</span>
                   ) : (
-                    <span className="text-muted-foreground">No</span>
+                    <span className="text-xs text-muted-foreground">None</span>
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {isAdminBook(book) ? (
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => openEdit(book)}
-                        aria-label={`Edit ${book.title}`}
-                      >
-                        <Edit className="size-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => handleDelete(book)}
-                        disabled={deleting === book.id}
-                        aria-label={`Delete ${book.title}`}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-muted-foreground">Read-only</span>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => openEdit(book)}
+                      aria-label={`Edit ${book.title}`}
+                    >
+                      <Edit className="size-3.5" />
+                    </Button>
+                    {isMaster && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => handleArchive(book, !book.archived)}
+                          aria-label={book.archived ? 'Unarchive' : 'Archive'}
+                        >
+                          {book.archived ? (
+                            <ArchiveRestore className="size-3.5 text-amber-600" />
+                          ) : (
+                            <Archive className="size-3.5 text-muted-foreground" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => handleDelete(book)}
+                          disabled={deleting === String(book.id)}
+                          aria-label={`Delete ${book.title}`}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -386,6 +497,37 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
                 />
               </div>
 
+              {/* File Upload */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Book File (PDF, DOC, DOCX, EPUB, TXT — max 50MB)
+                </label>
+                <div className="flex items-center gap-2">
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm transition-colors hover:bg-muted">
+                    <Upload className="size-4" />
+                    {uploading ? 'Uploading...' : 'Choose File'}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.epub,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/epub+zip,text/plain"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                      disabled={uploading || !form.slug}
+                    />
+                  </label>
+                  {uploading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+                </div>
+                {uploadedFile && (
+                  <p className="mt-1 text-xs text-green-600">
+                    File uploaded: {uploadedFile.split('/').pop()}
+                  </p>
+                )}
+                {!form.slug && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Set a slug before uploading a file
+                  </p>
+                )}
+              </div>
+
               <div>
                 <label htmlFor="tagline" className="mb-1 block text-xs font-medium text-muted-foreground">
                   Tagline
@@ -471,7 +613,13 @@ export function AdminBookManager({ books }: AdminBookManagerProps) {
                   Cancel
                 </Button>
                 <Button type="submit" size="sm" disabled={saving}>
-                  {saving ? 'Saving...' : modal.mode === 'create' ? 'Create Book' : 'Save Changes'}
+                  {saving
+                    ? 'Saving...'
+                    : needsPending && modal?.mode === 'create'
+                      ? 'Submit for Approval'
+                      : modal?.mode === 'create'
+                        ? 'Create Book'
+                        : 'Save Changes'}
                 </Button>
               </div>
             </form>

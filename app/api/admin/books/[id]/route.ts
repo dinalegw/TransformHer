@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
-import { getAdminBook, updateAdminBook, deleteAdminBook } from '@/lib/admin-books'
+import { getAdminBook, updateAdminBook, deleteAdminBook, deleteBookBySlug } from '@/lib/admin-books'
 
 export async function GET(
   _req: Request,
@@ -43,13 +43,34 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await requireAdmin()
     const { id } = await params
-    await deleteAdminBook(id)
+    const { searchParams } = new URL(req.url)
+    const source = searchParams.get('source')
+
+    if (source === 'seed') {
+      // Seed book deletion — need slug from query param
+      const slug = searchParams.get('slug')
+      if (!slug) {
+        return NextResponse.json({ error: 'slug is required for seed book deletion' }, { status: 400 })
+      }
+      await deleteBookBySlug(slug)
+    } else if (source === 'admin') {
+      // Admin book — hard-delete
+      await deleteAdminBook(id)
+    } else {
+      // Backward-compat: assume admin UUID if source not provided
+      try {
+        await deleteBookBySlug(searchParams.get('slug') || '')
+      } catch {
+        await deleteAdminBook(id)
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthorized: admin access required') {

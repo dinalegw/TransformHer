@@ -6,12 +6,17 @@ import { join } from 'path'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { user as userTable } from '@/lib/db/schema'
+import { MASTER_ADMIN_EMAIL } from '@/lib/permissions'
+import type { UserRole, AdminRank } from '@/lib/permissions'
 
 export interface AuthUser {
   id: string
   name: string
   email: string
   isAdmin: boolean
+  role: UserRole
+  rank?: AdminRank
+  title?: string
   username?: string
   phone?: string
   showFullName: boolean
@@ -24,6 +29,9 @@ interface StoredUser {
   email: string
   passwordHash: string
   isAdmin: boolean
+  role: UserRole
+  rank?: AdminRank
+  title?: string
   username?: string
   phone?: string
   showFullName: boolean
@@ -201,6 +209,9 @@ export async function createUser(
   email: string,
   password: string,
   isAdmin = false,
+  role: UserRole = 'user',
+  rank?: AdminRank,
+  title?: string,
 ): Promise<{ id: string; name: string; email: string }> {
   const normalizedEmail = normalizeEmail(email)
   const db = getDb()
@@ -243,6 +254,9 @@ export async function createUser(
     email: normalizedEmail,
     passwordHash,
     isAdmin,
+    role,
+    rank: rank ?? (isAdmin ? (role === 'master_admin' ? 'master' : 'junior') : undefined),
+    title,
     showFullName: false,
   }
 
@@ -256,7 +270,7 @@ export async function createUser(
 export async function authenticateUser(
   email: string,
   password: string,
-): Promise<{ id: string; name: string; email: string; isAdmin: boolean } | null> {
+): Promise<{ id: string; name: string; email: string; isAdmin: boolean; role: UserRole; rank?: AdminRank; title?: string } | null> {
   const normalizedEmail = normalizeEmail(email)
   const db = getDb()
 
@@ -285,6 +299,7 @@ export async function authenticateUser(
       name: user.name,
       email: user.email,
       isAdmin: user.isAdmin ?? false,
+      role: user.isAdmin ? 'master_admin' : 'user',
     }
   }
 
@@ -299,7 +314,7 @@ export async function authenticateUser(
   const valid = verifyPassword(password, user.passwordHash)
   if (!valid) return null
 
-  return { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin }
+  return { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, role: user.role, rank: user.rank, title: user.title }
 }
 
 export async function createSession(userId: string): Promise<string> {
@@ -324,6 +339,7 @@ export async function createSession(userId: string): Promise<string> {
       name: u.name,
       email: u.email,
       isAdmin: u.isAdmin ?? false,
+      role: u.isAdmin ? 'master_admin' : 'user',
       exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
     })
   }
@@ -338,6 +354,9 @@ export async function createSession(userId: string): Promise<string> {
     name: user.name,
     email: user.email,
     isAdmin: user.isAdmin,
+    role: user.role,
+    rank: user.rank,
+    title: user.title,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   })
 }
@@ -377,6 +396,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       name: u.name,
       email: u.email,
       isAdmin: u.isAdmin ?? false,
+      role: u.isAdmin ? 'master_admin' : 'user',
       username: u.username ?? undefined,
       phone: u.phone ?? undefined,
       showFullName: u.showFullName ?? false,
@@ -392,6 +412,9 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     name: user.name,
     email: user.email,
     isAdmin: user.isAdmin,
+    role: user.role,
+    rank: user.rank,
+    title: user.title,
     username: user.username,
     phone: user.phone,
     showFullName: user.showFullName ?? false,
@@ -553,7 +576,7 @@ export async function isEmailVerified(email: string): Promise<boolean> {
 }
 
 function getAdminEmail(): string {
-  return process.env.ADMIN_EMAIL || 'danieloinalegwu@gmail.com'
+  return process.env.ADMIN_EMAIL || MASTER_ADMIN_EMAIL
 }
 
 function getAdminPassword(): string {
@@ -569,8 +592,10 @@ function seedAdminUser(store: AuthStore): void {
     const existing = store.users.get(existingUserId)
     if (existing && !existing.isAdmin) {
       existing.isAdmin = true
+      existing.role = 'master_admin'
+      existing.rank = 'master'
       saveStore(store)
-      console.log(`[auth] Promoted ${adminEmail} to admin`)
+      console.log(`[auth] Promoted ${adminEmail} to master admin`)
     }
     return
   }
@@ -583,6 +608,9 @@ function seedAdminUser(store: AuthStore): void {
     email: normalizedEmail,
     passwordHash,
     isAdmin: true,
+    role: 'master_admin',
+    rank: 'master',
+    title: 'Master Admin',
     showFullName: false,
   }
   store.users.set(id, user)
@@ -612,7 +640,7 @@ export async function seedDbAdmin(): Promise<void> {
         await db.update(userTable)
           .set({ isAdmin: true })
           .where(eq(userTable.email, normalizedEmail))
-        console.log(`[auth] Promoted ${adminEmail} to admin in DB`)
+        console.log(`[auth] Promoted ${adminEmail} to master admin in DB`)
       }
       return
     }
@@ -642,8 +670,26 @@ export async function requireAdmin(): Promise<AuthUser> {
   return user
 }
 
+export async function requireMasterAdmin(): Promise<AuthUser> {
+  const user = await getCurrentUser()
+  if (!user || user.role !== 'master_admin') {
+    throw new Error('Unauthorized: master admin access required')
+  }
+  return user
+}
+
 export async function getAdminUser(): Promise<AuthUser | null> {
   const user = await getCurrentUser()
   if (!user || !user.isAdmin) return null
   return user
+}
+
+/* ─── Admin user management ──────────────────────────────────────────── */
+
+export function getUsersStore() {
+  return getStore()
+}
+
+export function saveUsersStore(): void {
+  persistStore()
 }
