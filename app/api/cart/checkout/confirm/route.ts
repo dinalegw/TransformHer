@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
     const result = await verifyPaystackPayment(reference)
 
-    if (!result.status) {
+    if (!result.status || result.data?.status !== 'success') {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 402 })
     }
 

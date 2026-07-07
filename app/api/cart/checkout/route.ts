@@ -36,7 +36,7 @@ export async function POST() {
       callback_url: `${getBaseUrl()}/cart?purchased=true`,
     })
 
-    if (!result.status) {
+    if (!result.status || !result.data?.authorization_url) {
       return NextResponse.json({ error: result.message ?? 'Paystack initialization failed' }, { status: 502 })
     }
 

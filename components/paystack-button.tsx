@@ -31,12 +31,15 @@ export function PaystackButton({
     return () => window.removeEventListener('cart-updated', onCartUpdate)
   }, [bookId])
 
+  const [error, setError] = useState<string | null>(null)
+
   async function handleClick() {
     if (inCart) {
       window.location.href = '/cart'
       return
     }
     setLoading(true)
+    setError(null)
     try {
       const res = await fetch('/api/paystack/initialize', {
         method: 'POST',
@@ -48,22 +51,27 @@ export function PaystackButton({
         window.location.href = data.data.authorization_url
         return
       }
-      console.error('Paystack init failed:', data)
-    } catch (err) {
-      console.error('Paystack init error:', err)
+      setError(data.error || data.message || 'Payment initialization failed')
+    } catch {
+      setError('Network error. Please try again.')
     }
     setLoading(false)
   }
 
   return (
-    <Button
-      size="lg"
-      className="rounded-full px-8"
-      onClick={handleClick}
-      disabled={loading}
-    >
-      {inCart ? <ArrowRight className="size-4" /> : <ShoppingCart className="size-4" />}
-      {loading ? 'Redirecting...' : inCart ? 'View in Cart' : 'Buy & Read Now'}
-    </Button>
+    <div className="flex flex-col gap-2">
+      <Button
+        size="lg"
+        className="rounded-full px-8"
+        onClick={handleClick}
+        disabled={loading}
+      >
+        {inCart ? <ArrowRight className="size-4" /> : <ShoppingCart className="size-4" />}
+        {loading ? 'Redirecting...' : inCart ? 'View in Cart' : 'Buy & Read Now'}
+      </Button>
+      {error && (
+        <p className="text-xs text-destructive max-w-64">{error}</p>
+      )}
+    </div>
   )
 }

@@ -11,7 +11,7 @@ export async function POST(req: Request) {
 
     const result = await verifyPaystackPayment(reference)
 
-    if (result.status && result.data?.metadata) {
+    if (result.status && result.data?.status === 'success' && result.data?.metadata) {
       const { bookTitle, bookSlug } = result.data.metadata
       const customerEmail = result.data.customer?.email ?? ''
       const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')

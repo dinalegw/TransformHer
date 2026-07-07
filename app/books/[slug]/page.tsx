@@ -54,7 +54,7 @@ export default async function BookDetailPage({
     if (ref) {
       try {
         const result = await verifyPaystackPayment(ref)
-        if (result.status && result.data?.metadata) {
+        if (result.status && result.data?.status === 'success' && result.data?.metadata) {
           const { userId: purchaseUserId, bookTitle } = result.data.metadata
           const customerEmail = result.data.customer?.email ?? ''
           const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')

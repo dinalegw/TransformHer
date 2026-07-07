@@ -55,15 +55,22 @@ export function CartView({
     }
   }, [searchParams, router])
 
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+
   async function handleCheckout() {
     setCheckingOut(true)
+    setCheckoutError(null)
     try {
       const res = await fetch('/api/cart/checkout', { method: 'POST' })
       const data = await res.json()
       if (data.authorization_url) {
         window.location.href = data.authorization_url
+        return
       }
-    } catch {}
+      setCheckoutError(data.error || 'Failed to initialize payment. Please try again.')
+    } catch {
+      setCheckoutError('Network error. Please try again.')
+    }
     setCheckingOut(false)
   }
 
@@ -167,6 +174,11 @@ export function CartView({
           <ArrowRight className="size-4" />
         </Button>
       </div>
+      {checkoutError && (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {checkoutError}
+        </div>
+      )}
     </div>
   )
 }
