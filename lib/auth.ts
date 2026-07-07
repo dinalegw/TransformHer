@@ -552,12 +552,18 @@ export async function isEmailVerified(email: string): Promise<boolean> {
   return true
 }
 
-const ADMIN_EMAIL = 'danieloinalegwu@gmail.com'
-const ADMIN_PASSWORD = 'Admin@123'
+function getAdminEmail(): string {
+  return process.env.ADMIN_EMAIL || 'danieloinalegwu@gmail.com'
+}
+
+function getAdminPassword(): string {
+  return process.env.ADMIN_PASSWORD || 'Admin@123'
+}
 
 function seedAdminUser(): void {
   const store = getStore()
-  const normalizedEmail = normalizeEmail(ADMIN_EMAIL)
+  const adminEmail = getAdminEmail()
+  const normalizedEmail = normalizeEmail(adminEmail)
   const existingUserId = store.emailIndex.get(normalizedEmail)
 
   if (existingUserId) {
@@ -565,16 +571,16 @@ function seedAdminUser(): void {
     if (existing && !existing.isAdmin) {
       existing.isAdmin = true
       persistStore()
-      console.log(`[auth] Promoted ${ADMIN_EMAIL} to admin`)
+      console.log(`[auth] Promoted ${adminEmail} to admin`)
     }
     return
   }
 
   const id = randomUUID()
-  const passwordHash = hashPassword(ADMIN_PASSWORD)
+  const passwordHash = hashPassword(getAdminPassword())
   const user: StoredUser = {
     id,
-    name: 'Daniel',
+    name: 'Admin',
     email: normalizedEmail,
     passwordHash,
     isAdmin: true,
@@ -589,7 +595,8 @@ export async function seedDbAdmin(): Promise<void> {
   const db = getDb()
   if (!db) return
 
-  const normalizedEmail = normalizeEmail(ADMIN_EMAIL)
+  const adminEmail = getAdminEmail()
+  const normalizedEmail = normalizeEmail(adminEmail)
   const existing = await db.select({ id: userTable.id, isAdmin: userTable.isAdmin })
     .from(userTable)
     .where(eq(userTable.email, normalizedEmail))
@@ -600,17 +607,33 @@ export async function seedDbAdmin(): Promise<void> {
       await db.update(userTable)
         .set({ isAdmin: true })
         .where(eq(userTable.email, normalizedEmail))
+      console.log(`[auth] Promoted ${adminEmail} to admin in DB`)
     }
     return
   }
 
   const id = randomUUID()
-  const passwordHash = hashPassword(ADMIN_PASSWORD)
+  const passwordHash = hashPassword(getAdminPassword())
   await db.insert(userTable).values({
     id,
-    name: 'Daniel',
+    name: 'Admin',
     email: normalizedEmail,
     passwordHash,
     isAdmin: true,
   })
+  console.log(`[auth] Created admin user ${adminEmail} in DB`)
+}
+
+export async function requireAdmin(): Promise<AuthUser> {
+  const user = await getCurrentUser()
+  if (!user || !user.isAdmin) {
+    throw new Error('Unauthorized: admin access required')
+  }
+  return user
+}
+
+export async function getAdminUser(): Promise<AuthUser | null> {
+  const user = await getCurrentUser()
+  if (!user || !user.isAdmin) return null
+  return user
 }
