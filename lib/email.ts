@@ -1,187 +1,112 @@
-import Courier from '@trycourier/courier'
+import { Courier } from '@trycourier/courier'
 
-let _client: Courier | null = null
+let client: Courier | null = null
 
 function getClient(): Courier {
-  if (!_client) {
+  if (!client) {
     const apiKey = process.env.COURIER_API_KEY
     if (!apiKey) {
-      throw new EmailSendError('COURIER_API_KEY is not configured')
+      throw new Error('[courier] COURIER_API_KEY is not configured')
     }
-    _client = new Courier({
+    client = new Courier({
       apiKey,
-      maxRetries: 3,
       timeout: 30_000,
+      maxRetries: 2,
     })
   }
-  return _client
+  return client
 }
 
 function getTemplate(key: string): string {
-  const value = process.env[key]
-  if (!value || typeof value !== 'string') {
-    throw new EmailSendError(`${key} environment variable is required`)
+  const templateId = process.env[key]
+  if (!templateId) {
+    throw new Error(`[courier] ${key} is not configured`)
   }
-  return value
+  return templateId
 }
 
-export class EmailSendError extends Error {
-  cause: unknown
-  constructor(message: string, cause?: unknown) {
+export class CourierEmailError extends Error {
+  constructor(message: string) {
     super(message)
-    this.name = 'EmailSendError'
-    this.cause = cause
+    this.name = 'CourierEmailError'
   }
 }
 
-async function sendCourierMessage(
+async function sendMessage(
   to: string,
-  template: string,
+  templateId: string,
   data: Record<string, unknown>,
-  context: string,
+  label: string,
 ): Promise<void> {
-  const client = getClient()
   try {
-    await client.send.message({
+    console.info(`[courier] send:${label}`, {
+      to,
+      template: templateId,
+      dataKeys: Object.keys(data),
+    })
+    const res = await getClient().send.message({
       message: {
         to: { email: to },
-        template,
+        template: templateId,
         data,
       },
     })
+    console.info(`[courier] sent:${label}`, { requestId: res.requestId })
   } catch (error) {
-    if (error instanceof Error) {
-      console.error(`[email] Courier ${context} failed:`, {
-        message: error.message,
-        raw: error,
-      })
-    } else {
-      console.error(`[email] Courier ${context} failed with unknown error:`, error)
-    }
-    throw new EmailSendError(`Courier ${context} failed`, error)
+    console.error(`[courier] send_failed:${label}`, {
+      to,
+      template: templateId,
+      dataKeys: Object.keys(data),
+      error,
+    })
+    throw new CourierEmailError(`Courier ${label} failed: ${error instanceof Error ? error.message : error}`)
   }
 }
 
 export async function sendPasswordResetEmail(to: string, resetLink: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_PASSWORD_RESET'),
-    { resetLink },
-    'password reset email'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_PASSWORD_RESET'), { resetLink }, 'password_reset')
 }
 
 export async function sendPasswordResetConfirmationEmail(to: string, name: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_PASSWORD_RESET_CONFIRMATION'),
-    { name },
-    'password reset confirmation email'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_PASSWORD_RESET_CONFIRMATION'), { name }, 'password_reset_confirmation')
 }
 
 export async function sendPasswordChangedEmail(to: string, name: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_PASSWORD_CHANGED'),
-    { name },
-    'password changed notification'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_PASSWORD_CHANGED'), { name }, 'password_changed')
 }
 
 export async function sendWelcomeVerificationEmail(to: string, name: string, verifyLink: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_WELCOME_VERIFY'),
-    { name, verifyLink },
-    'welcome verification email'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_WELCOME_VERIFY'), { name, verifyLink }, 'welcome_verify')
 }
 
 export async function sendEmailVerifiedEmail(to: string, name: string, libraryLink: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_EMAIL_VERIFIED'),
-    { name, libraryLink },
-    'email verified notification'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_EMAIL_VERIFIED'), { name, libraryLink }, 'email_verified')
 }
 
 export async function sendVerifyNewEmailEmail(to: string, name: string, verifyLink: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_VERIFY_NEW_EMAIL'),
-    { name, verifyLink },
-    'verify new email notification'
-  )
-}
-
-export async function sendPurchaseConfirmation(
-  to: string,
-  name: string,
-  bookTitle: string,
-  amount: string,
-) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_ORDER_CONFIRMATION'),
-    { name, bookTitle, amount },
-    'purchase confirmation'
-  )
-}
-
-export async function sendBookReleasedEmail(
-  to: string,
-  name: string,
-  bookTitle: string,
-  libraryLink: string,
-) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_BOOK_RELEASED'),
-    { name, bookTitle, libraryLink },
-    'book released notification'
-  )
-}
-
-export async function sendAdminOrderNotification(
-  adminEmail: string,
-  customerEmail: string,
-  customerName: string,
-  bookTitle: string,
-  amount: string,
-) {
-  return sendCourierMessage(
-    adminEmail,
-    getTemplate('COURIER_TEMPLATE_ADMIN_ORDER'),
-    { bookTitle, customerName, customerEmail, amount },
-    'admin order notification'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_VERIFY_NEW_EMAIL'), { name, verifyLink }, 'verify_new_email')
 }
 
 export async function sendLoginNotification(to: string, name: string, location?: string, device?: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_LOGIN_NOTIFICATION'),
-    { name, location, device },
-    'login notification'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_LOGIN_NOTIFICATION'), { name, location, device }, 'login_notification')
 }
 
 export async function sendSecurityAlert(to: string, name: string, alertType: string, details?: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_SECURITY_ALERT'),
-    { name, alertType, details },
-    'security alert'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_SECURITY_ALERT'), { name, alertType, details }, 'security_alert')
 }
 
 export async function sendInvitationEmail(to: string, name: string, inviteLink: string, inviterName: string) {
-  return sendCourierMessage(
-    to,
-    getTemplate('COURIER_TEMPLATE_INVITATION'),
-    { name, inviteLink, inviterName },
-    'invitation email'
-  )
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_INVITATION'), { name, inviteLink, inviterName }, 'invitation')
+}
+
+export async function sendPurchaseConfirmation(to: string, name: string, bookTitle: string, amount: string) {
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_ORDER_CONFIRMATION'), { name, bookTitle, amount }, 'purchase_confirmation')
+}
+
+export async function sendBookReleasedEmail(to: string, name: string, bookTitle: string, libraryLink: string) {
+  return sendMessage(to, getTemplate('COURIER_TEMPLATE_BOOK_RELEASED'), { name, bookTitle, libraryLink }, 'book_released')
+}
+
+export async function sendAdminOrderNotification(adminEmail: string, customerEmail: string, customerName: string, bookTitle: string, amount: string) {
+  return sendMessage(adminEmail, getTemplate('COURIER_TEMPLATE_ADMIN_ORDER'), { bookTitle, customerName, customerEmail, amount }, 'admin_order')
 }

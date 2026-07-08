@@ -27,7 +27,12 @@ export default async function BooksPage({
 
   const books = await getAllBooks({ q, category, sort })
   const user = await getCurrentUser()
-  const ownedIds = user ? new Set((await fetchLibrary(user.id)).map(i => i.bookId)) : new Set<number>()
+  const isMasterAdmin = user?.role === 'master_admin'
+  const ownedIds = user
+    ? isMasterAdmin
+      ? new Set(books.map(b => b.id))
+      : new Set((await fetchLibrary(user.id)).map(i => i.bookId))
+    : new Set<number>()
 
   return (
     <div className="flex min-h-svh flex-col">

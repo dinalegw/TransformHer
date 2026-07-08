@@ -2,8 +2,10 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, ShieldOff, UserCog, Star, Loader2 } from 'lucide-react'
+import { Shield, ShieldOff, UserCog, Star, Loader2, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
 
 interface StoredUser {
   id: string
@@ -14,6 +16,7 @@ interface StoredUser {
   rank?: string
   title?: string
   username?: string
+  permissions: Permission[]
 }
 
 const ADMIN_RANKS = [
@@ -23,12 +26,35 @@ const ADMIN_RANKS = [
   { value: 'master', label: 'Master Admin' },
 ] as const
 
-export function AdminUserManager() {
+const PERMISSION_LABELS: Record<Permission, string> = {
+  view_books: 'View Books',
+  create_books: 'Create Books',
+  edit_books: 'Edit Books',
+  delete_books: 'Delete Books',
+  archive_books: 'Archive Books',
+  approve_changes: 'Approve Changes',
+  manage_users: 'Manage Users',
+  manage_admins: 'Manage Admins',
+  view_orders: 'View Orders',
+  manage_orders: 'Manage Orders',
+  unlock_books: 'Unlock Books',
+  view_analytics: 'View Analytics',
+  manage_settings: 'Manage Settings',
+}
+
+interface Props {
+  showOnlyUsers?: boolean
+  showOnlyAdmins?: boolean
+}
+
+export function AdminUserManager({ showOnlyUsers, showOnlyAdmins }: Props) {
   const router = useRouter()
   const [users, setUsers] = useState<StoredUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updating, setUpdating] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [editPerms, setEditPerms] = useState<string | null>(null)
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -77,20 +103,27 @@ export function AdminUserManager() {
     }
   }, [fetchUsers, router])
 
-  const updateRank = useCallback(async (userId: string, rank: string) => {
+  const updatePermission = useCallback(async (userId: string, perm: Permission, add: boolean) => {
+    const user = users.find(u => u.id === userId)
+    if (!user || user.role === 'master_admin') return
+
     setUpdating(userId)
     setError('')
 
     try {
+      const newPerms = add
+        ? [...(user.permissions || []), perm]
+        : (user.permissions || []).filter(p => p !== perm)
+
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rank }),
+        body: JSON.stringify({ permissions: newPerms }),
       })
 
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || 'Failed to update rank')
+        throw new Error(data.error || 'Failed to update permissions')
       }
 
       await fetchUsers()
@@ -100,7 +133,7 @@ export function AdminUserManager() {
     } finally {
       setUpdating(null)
     }
-  }, [fetchUsers, router])
+  }, [users, fetchUsers, router])
 
   if (loading) {
     return (
@@ -110,8 +143,19 @@ export function AdminUserManager() {
     )
   }
 
-  const adminUsers = users.filter(u => u.isAdmin)
-  const regularUsers = users.filter(u => !u.isAdmin)
+  const filtered = users.filter(u => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return (
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q)
+    )
+  })
+
+  const adminUsers = filtered.filter(u => u.isAdmin)
+  const regularUsers = filtered.filter(u => !u.isAdmin)
+
+  const displayUsers = showOnlyAdmins ? adminUsers : showOnlyUsers ? regularUsers : filtered
 
   return (
     <div>
@@ -121,98 +165,149 @@ export function AdminUserManager() {
         </div>
       )}
 
-      {adminUsers.length > 0 && (
-        <div className="mb-8">
-          <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-            Administrators ({adminUsers.length})
-          </h3>
-          <div className="space-y-2">
-            {adminUsers.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center justify-between rounded-lg border border-border p-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Shield className="size-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">
-                      {user.name || user.email}
-                    </span>
-                    {user.role === 'master_admin' && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                        <Star className="size-3" />
-                        Master
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{user.email}</p>
-                  {user.rank && user.role !== 'master_admin' && (
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-[10px] text-muted-foreground/60">Rank:</span>
-                      <select
-                        value={user.rank}
-                        onChange={(e) => updateRank(user.id, e.target.value)}
-                        disabled={updating === user.id}
-                        className="h-6 rounded border border-input bg-transparent px-1.5 text-[11px] outline-none focus-visible:border-ring"
-                      >
-                        {ADMIN_RANKS.map((r) => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
-                {user.role !== 'master_admin' && (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => toggleAdmin(user)}
-                    disabled={updating === user.id}
-                    className="text-destructive hover:text-destructive"
-                  >
-                    <ShieldOff className="size-3.5" />
-                    Remove
-                  </Button>
-                )}
-              </div>
-            ))}
+      <div className="mb-4 flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name or email..."
+            className="pl-9"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {users.length} total
+        </p>
+      </div>
+
+      {editPerms && (
+        <div className="mb-6 rounded-xl border border-border p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground">
+              Edit Permissions
+            </h3>
+            <Button variant="ghost" size="xs" onClick={() => setEditPerms(null)}>
+              <X className="size-3.5" />
+              Close
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+            {ALL_PERMISSIONS.map((perm) => {
+              const user = users.find(u => u.id === editPerms)
+              const has = user?.permissions?.includes(perm) ?? false
+              return (
+                <label
+                  key={perm}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted/50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={has}
+                    onChange={() => updatePermission(editPerms, perm, !has)}
+                    disabled={updating === editPerms}
+                    className="size-4 rounded border-border accent-primary"
+                  />
+                  {PERMISSION_LABELS[perm]}
+                </label>
+              )
+            })}
           </div>
         </div>
       )}
 
-      <div>
-        <h3 className="mb-3 text-sm font-medium text-muted-foreground">
-          Users ({regularUsers.length})
-        </h3>
-        <div className="space-y-2">
-          {regularUsers.map((user) => (
-            <div
-              key={user.id}
-              className="flex items-center justify-between rounded-lg border border-border p-3"
-            >
-              <div className="min-w-0 flex-1">
-                <span className="text-sm text-foreground">
+      <div className="space-y-2">
+        {displayUsers.map((user) => (
+          <div
+            key={user.id}
+            className="flex items-center justify-between rounded-lg border border-border p-3 transition-colors hover:bg-muted/30"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                {user.isAdmin ? (
+                  <Shield className="size-4 text-primary" />
+                ) : (
+                  <UserCog className="size-4 text-muted-foreground" />
+                )}
+                <span className="text-sm font-medium text-foreground">
                   {user.name || user.email}
                 </span>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
+                {user.role === 'master_admin' && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    <Star className="size-3" />
+                    Master
+                  </span>
+                )}
+                {user.isAdmin && user.role !== 'master_admin' && (
+                  <span className="inline-flex items-center rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                    Admin
+                  </span>
+                )}
               </div>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => toggleAdmin(user)}
-                disabled={updating === user.id}
-              >
-                <UserCog className="size-3.5" />
-                Make Admin
-              </Button>
+              <p className="mt-0.5 text-xs text-muted-foreground">{user.email}</p>
+              {user.isAdmin && user.role !== 'master_admin' && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {(user.permissions || []).slice(0, 4).map(p => (
+                    <span
+                      key={p}
+                      className="inline-flex rounded-full bg-secondary px-1.5 py-0.5 text-[9px] text-muted-foreground"
+                    >
+                      {PERMISSION_LABELS[p]}
+                    </span>
+                  ))}
+                  {(user.permissions || []).length > 4 && (
+                    <span className="text-[9px] text-muted-foreground">
+                      +{(user.permissions || []).length - 4} more
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
-          {regularUsers.length === 0 && (
-            <p className="py-4 text-center text-sm text-muted-foreground">
-              No other users found.
-            </p>
-          )}
-        </div>
+            <div className="ml-3 flex shrink-0 items-center gap-1">
+              {user.isAdmin && user.role !== 'master_admin' && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setEditPerms(editPerms === user.id ? null : user.id)}
+                >
+                  <Shield className="size-3.5" />
+                  Permissions
+                </Button>
+              )}
+              {!showOnlyUsers && user.role !== 'master_admin' && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => toggleAdmin(user)}
+                  disabled={updating === user.id}
+                  className={user.isAdmin ? 'text-destructive hover:text-destructive' : ''}
+                >
+                  {updating === user.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : user.isAdmin ? (
+                    <ShieldOff className="size-3.5" />
+                  ) : (
+                    <UserCog className="size-3.5" />
+                  )}
+                  {user.isAdmin ? 'Remove' : 'Make Admin'}
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+        {displayUsers.length === 0 && (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            {search ? 'No users match your search.' : 'No users found.'}
+          </p>
+        )}
       </div>
     </div>
   )

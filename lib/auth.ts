@@ -6,8 +6,8 @@ import { join } from 'path'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { user as userTable } from '@/lib/db/schema'
-import { MASTER_ADMIN_EMAIL } from '@/lib/permissions'
-import type { UserRole, AdminRank } from '@/lib/permissions'
+import { MASTER_ADMIN_EMAIL, getDefaultPermissions } from '@/lib/permissions'
+import type { UserRole, AdminRank, Permission } from '@/lib/permissions'
 
 export interface AuthUser {
   id: string
@@ -20,6 +20,7 @@ export interface AuthUser {
   username?: string
   phone?: string
   showFullName: boolean
+  permissions: Permission[]
 }
 
 
@@ -35,6 +36,7 @@ interface StoredUser {
   username?: string
   phone?: string
   showFullName: boolean
+  permissions: Permission[]
 }
 
 interface AuthStore {
@@ -258,6 +260,7 @@ export async function createUser(
     rank: rank ?? (isAdmin ? (role === 'master_admin' ? 'master' : 'junior') : undefined),
     title,
     showFullName: false,
+    permissions: getDefaultPermissions(role as UserRole),
   }
 
   store.users.set(id, user)
@@ -270,7 +273,7 @@ export async function createUser(
 export async function authenticateUser(
   email: string,
   password: string,
-): Promise<{ id: string; name: string; email: string; isAdmin: boolean; role: UserRole; rank?: AdminRank; title?: string } | null> {
+): Promise<{ id: string; name: string; email: string; isAdmin: boolean; role: UserRole; rank?: AdminRank; title?: string; permissions: Permission[] } | null> {
   const normalizedEmail = normalizeEmail(email)
   const db = getDb()
 
@@ -300,6 +303,7 @@ export async function authenticateUser(
       email: user.email,
       isAdmin: user.isAdmin ?? false,
       role: user.isAdmin ? 'master_admin' : 'user',
+      permissions: [],
     }
   }
 
@@ -314,7 +318,7 @@ export async function authenticateUser(
   const valid = verifyPassword(password, user.passwordHash)
   if (!valid) return null
 
-  return { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, role: user.role, rank: user.rank, title: user.title }
+  return { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, role: user.role, rank: user.rank, title: user.title, permissions: user.permissions }
 }
 
 export async function createSession(userId: string): Promise<string> {
@@ -340,6 +344,7 @@ export async function createSession(userId: string): Promise<string> {
       email: u.email,
       isAdmin: u.isAdmin ?? false,
       role: u.isAdmin ? 'master_admin' : 'user',
+      permissions: [],
       exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
     })
   }
@@ -357,6 +362,7 @@ export async function createSession(userId: string): Promise<string> {
     role: user.role,
     rank: user.rank,
     title: user.title,
+    permissions: user.permissions,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   })
 }
@@ -400,6 +406,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       username: u.username ?? undefined,
       phone: u.phone ?? undefined,
       showFullName: u.showFullName ?? false,
+      permissions: [],
     }
   }
 
@@ -418,6 +425,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     username: user.username,
     phone: user.phone,
     showFullName: user.showFullName ?? false,
+    permissions: user.permissions,
   }
 }
 
@@ -534,7 +542,7 @@ export async function markEmailVerified(email: string): Promise<void> {
   if (!userId) return
   const user = store.users.get(userId)
   if (user) {
-    ;(user as Record<string, unknown>).emailVerified = true
+    ;(user as unknown as Record<string, unknown>).emailVerified = true
     persistStore()
   }
 }
@@ -598,6 +606,7 @@ function seedAdminUser(store: AuthStore): void {
       existing.role = 'master_admin'
       existing.rank = 'master'
       existing.title = 'Master Admin'
+      existing.permissions = getDefaultPermissions('master_admin')
       saveStore(store)
       return
     }
@@ -614,6 +623,7 @@ function seedAdminUser(store: AuthStore): void {
     rank: 'master',
     title: 'Master Admin',
     showFullName: false,
+    permissions: getDefaultPermissions('master_admin'),
   }
   store.users.set(id, user)
   store.emailIndex.set(normalizedEmail, id)

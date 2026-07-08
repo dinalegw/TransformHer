@@ -2,16 +2,17 @@ import 'server-only'
 import { SEED_BOOKS, type SeedBook } from '@/lib/seed'
 import { getAllMergedBooks } from '@/lib/admin-books'
 
-export type Book = SeedBook
+export type Book = SeedBook & { archived?: boolean }
 
 export { CATEGORIES } from '@/lib/constants'
 
-function matchesQuery(book: { title: string; author: string; tagline?: string }, q: string): boolean {
+function matchesQuery(book: { title: string; author: string; tagline?: string | boolean }, q: string): boolean {
   const query = q.toLowerCase()
+  const tagline = typeof book.tagline === 'string' ? book.tagline : ''
   return (
     book.title.toLowerCase().includes(query) ||
     book.author.toLowerCase().includes(query) ||
-    (book.tagline && book.tagline.toLowerCase().includes(query))
+    tagline.toLowerCase().includes(query)
   )
 }
 
@@ -73,7 +74,7 @@ export async function getAllBooks(opts?: {
 export async function getBookBySlug(slug: string): Promise<Book | undefined> {
   const merged = await getAllMergedBooks()
   const book = merged.find((b) => b.slug === slug)
-  if (book?.archived) return undefined
+  if (book && (book as unknown as { archived?: boolean }).archived) return undefined
   return book as Book | undefined
 }
 
@@ -84,7 +85,7 @@ export async function getRelatedBooks(
 ): Promise<Book[]> {
   const merged = await getAllMergedBooks()
   return merged
-    .filter((b) => b.category === category && b.slug !== excludeSlug && !b.archived)
+    .filter((b) => b.category === category && b.slug !== excludeSlug && !(b as unknown as { archived?: boolean }).archived)
     .slice(0, limit) as Book[]
 }
 

@@ -110,7 +110,7 @@ function normalizeAdminBook(book: Omit<AdminBook, 'id' | 'createdAt' | 'updatedA
     featured: book.featured ?? false,
     bestseller: book.bestseller ?? false,
     archived: book.archived ?? false,
-    createdAt: book.createdAt || new Date().toISOString(),
+    createdAt: (book as Record<string, unknown>).createdAt as string || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     deleted: book.deleted ?? false,
   }
@@ -366,7 +366,7 @@ export async function countPendingChanges(): Promise<number> {
 /* Merged View                                                         */
 /* ------------------------------------------------------------------ */
 
-export type MergedBook = (SeedBook | AdminBook) & { source: 'seed' | 'admin' }
+export type MergedBook = (SeedBook | AdminBook) & { source: 'seed' | 'admin'; archived?: boolean; createdAt: Date | string; fileUrl?: string }
 
 export async function getAllMergedBooks(opts?: { includeArchived?: boolean }): Promise<MergedBook[]> {
   const adminBooks = await listAdminBooks()
@@ -382,7 +382,6 @@ export async function getAllMergedBooks(opts?: { includeArchived?: boolean }): P
     .filter((b) => !b.deleted && (opts?.includeArchived || !b.archived))
     .map((b) => ({
       ...b,
-      createdAt: new Date(b.createdAt),
       source: 'admin' as const,
     }))
 

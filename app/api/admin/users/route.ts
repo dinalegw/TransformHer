@@ -14,8 +14,9 @@ export async function GET() {
       rank: u.rank,
       title: u.title,
       username: u.username,
+      permissions: u.permissions,
     }))
-    return NextResponse.json({ users })
+    return NextResponse.json({ users, total: users.length })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

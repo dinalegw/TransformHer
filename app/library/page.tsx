@@ -18,7 +18,9 @@ export default async function LibraryPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  const justReleased = await releasePendingBooks(user.id)
+  const isMasterAdmin = user.role === 'master_admin'
+
+  const justReleased = isMasterAdmin ? [] : await releasePendingBooks(user.id)
 
   const allBooks = await getAllMergedBooks({ includeArchived: true })
   const bookBySlug = new Map(allBooks.map((b) => [b.slug, b]))
@@ -37,6 +39,44 @@ export default async function LibraryPage() {
         console.error('Failed to send release email:', err)
       }
     }
+  }
+
+  if (isMasterAdmin) {
+    const masterBooks = allBooks
+      .filter(b => !b.archived)
+      .map(b => ({
+        id: 0,
+        userId: user.id,
+        bookId: typeof b.id === 'number' ? b.id : 0,
+        bookSlug: b.slug,
+        purchaseDate: new Date().toISOString(),
+        released: true,
+        releaseAt: null,
+        book: b as typeof b & { fileUrl?: string },
+      }))
+
+    return (
+      <div className="flex min-h-svh flex-col">
+        <SiteHeader />
+        <main className="flex-1">
+          <section className="border-b border-border/60 bg-secondary/40">
+            <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+              <p className="text-xs uppercase tracking-luxe text-primary">Master Admin Access</p>
+              <h1 className="mt-2 font-heading text-3xl text-foreground md:text-4xl">
+                Full Library
+              </h1>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {masterBooks.length} {masterBooks.length === 1 ? 'book' : 'books'} — you have access to all books
+              </p>
+            </div>
+          </section>
+          <section className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+            <LibraryGrid items={masterBooks} />
+          </section>
+        </main>
+        <SiteFooter />
+      </div>
+    )
   }
 
   const items = await fetchLibrary(user.id, true)

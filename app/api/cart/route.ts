@@ -14,6 +14,10 @@ export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  if (user.role === 'master_admin') {
+    return NextResponse.json({ error: 'Master admin already has access to all books' }, { status: 400 })
+  }
+
   try {
     const { bookId: rawId } = await req.json()
     const bookId = Number(rawId)

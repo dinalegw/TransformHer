@@ -86,7 +86,10 @@ function getBookSlugById(bookId: number): string {
   return book?.slug ?? ''
 }
 
-export async function fetchLibrary(userId: string, includeArchived = false): Promise<LibraryItem[]> {
+export async function fetchLibrary(userId: string, includeArchived = false, isMasterAdmin = false): Promise<LibraryItem[]> {
+  if (isMasterAdmin) {
+    return []
+  }
   const db = getDb()
   if (db) {
     const rows = await db.select()
@@ -102,8 +105,6 @@ export async function fetchLibrary(userId: string, includeArchived = false): Pro
       releaseAt: r.releaseAt ? r.releaseAt.toISOString() : null,
     }))
     if (!includeArchived) {
-      // For DB, we need to check archived flag — stored alongside library items
-      // Fallback to in-memory for filtering
     }
     return items
   }
@@ -115,7 +116,10 @@ export async function fetchLibrary(userId: string, includeArchived = false): Pro
   return items
 }
 
-export async function getLibraryItem(userId: string, bookId: number): Promise<LibraryItem | null> {
+export async function getLibraryItem(userId: string, bookId: number, isMasterAdmin = false): Promise<LibraryItem | null> {
+  if (isMasterAdmin) {
+    return { id: 0, userId, bookId, bookSlug: '', purchaseDate: new Date().toISOString(), released: true, releaseAt: null }
+  }
   const db = getDb()
   if (db) {
     const rows = await db.select()
@@ -192,6 +196,23 @@ export async function recordPurchase(userId: string, bookId: number, bookSlug: s
   saveLibraryStore(store)
 }
 
+export async function releaseLibraryItem(userId: string, bookSlug: string): Promise<boolean> {
+  const db = getDb()
+  if (db) {
+    const result = await db.update(userPurchases)
+      .set({ released: true, releaseAt: new Date() })
+      .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookSlug, bookSlug)))
+    return result.rowCount ? result.rowCount > 0 : false
+  }
+  const store = getLibraryStore()
+  const item = store.items.find(i => i.userId === userId && i.bookSlug === bookSlug)
+  if (!item) return false
+  item.released = true
+  item.releaseAt = new Date().toISOString()
+  saveLibraryStore(store)
+  return true
+}
+
 export async function releasePendingBooks(userId: string): Promise<LibraryItem[]> {
   const now = new Date()
   const released: LibraryItem[] = []
@@ -259,7 +280,8 @@ export async function archiveLibraryItem(userId: string, bookSlug: string, archi
 
 /* ─── Check ownership by slug ──────────────────────────────────────────── */
 
-export async function ownsBookBySlug(userId: string, slug: string): Promise<boolean> {
+export async function ownsBookBySlug(userId: string, slug: string, isMasterAdmin = false): Promise<boolean> {
+  if (isMasterAdmin) return true
   const db = getDb()
   if (db) {
     const rows = await db.select({ id: userPurchases.id })
