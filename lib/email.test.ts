@@ -23,7 +23,8 @@ async function loadEmailModule(overrides: Record<string, string | undefined> = {
 
 describe('lib/email', () => {
   beforeEach(() => {
-    mockSendMessage.mockReset()
+    mockSendMessage.mockClear()
+    mockSendMessage.mockResolvedValue({ requestId: 'test-request-id' })
   })
 
   it('sends password reset email with correct payload', async () => {
@@ -34,6 +35,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-reset',
         data: { resetLink: 'https://example.com/reset' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -59,6 +61,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-changed',
         data: { name: 'Jane Doe' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -71,6 +74,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-reset-confirm',
         data: { name: 'Jane Doe' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -83,6 +87,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-welcome',
         data: { name: 'Jane Doe', verifyLink: 'https://example.com/verify' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -95,6 +100,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-verified',
         data: { name: 'Jane Doe', libraryLink: 'https://example.com/library' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -107,6 +113,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-login',
         data: { name: 'Jane Doe', location: undefined, device: undefined },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -119,6 +126,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-login',
         data: { name: 'Jane Doe', location: 'Lagos, Nigeria', device: 'Chrome on Mac' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -131,6 +139,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-alert',
         data: { name: 'Jane Doe', alertType: 'password_reset', details: 'Reset requested from unknown IP' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -143,6 +152,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-verify',
         data: { name: 'Jane Doe', verifyLink: 'https://example.com/verify' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -155,6 +165,7 @@ describe('lib/email', () => {
         to: { email: 'new@example.com' },
         template: 'test-invite',
         data: { name: 'John Doe', inviteLink: 'https://example.com/invite/abc', inviterName: 'Admin User' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -167,6 +178,7 @@ describe('lib/email', () => {
         to: { email: 'admin@example.com' },
         template: 'test-admin',
         data: { bookTitle: 'Book Title', customerName: 'Customer Name', customerEmail: 'customer@example.com', amount: '10.00' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -179,6 +191,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-order',
         data: { name: 'Jane Doe', bookTitle: 'My Book', amount: '25.00' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })
@@ -191,6 +204,7 @@ describe('lib/email', () => {
         to: { email: 'user@example.com' },
         template: 'test-book',
         data: { name: 'Jane Doe', bookTitle: 'My Book', libraryLink: 'https://example.com/library' },
+        routing: { method: 'single', channels: ['email'] },
       },
     })
   })

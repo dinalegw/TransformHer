@@ -1,4 +1,11 @@
-import { Courier } from '@trycourier/courier'
+import Courier from '@trycourier/courier'
+
+export class CourierEmailError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CourierEmailError'
+  }
+}
 
 let client: Courier | null = null
 
@@ -6,7 +13,7 @@ function getClient(): Courier {
   if (!client) {
     const apiKey = process.env.COURIER_API_KEY
     if (!apiKey) {
-      throw new Error('[courier] COURIER_API_KEY is not configured')
+      throw new CourierEmailError('[courier] COURIER_API_KEY is not configured')
     }
     client = new Courier({
       apiKey,
@@ -20,16 +27,9 @@ function getClient(): Courier {
 function getTemplate(key: string): string {
   const templateId = process.env[key]
   if (!templateId) {
-    throw new Error(`[courier] ${key} is not configured`)
+    throw new CourierEmailError(`[courier] ${key} is not configured`)
   }
   return templateId
-}
-
-export class CourierEmailError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CourierEmailError'
-  }
 }
 
 async function sendMessage(
@@ -49,6 +49,7 @@ async function sendMessage(
         to: { email: to },
         template: templateId,
         data,
+        routing: { method: 'single', channels: ['email'] },
       },
     })
     console.info(`[courier] sent:${label}`, { requestId: res.requestId })
