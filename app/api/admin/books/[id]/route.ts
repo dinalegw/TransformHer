@@ -9,7 +9,11 @@ export async function GET(
   try {
     await requireAdmin()
     const { id } = await params
-    const book = await getAdminBook(id)
+    const bookId = Number(id)
+    if (isNaN(bookId)) {
+      return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
+    }
+    const book = await getAdminBook(bookId)
     if (!book) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     }
@@ -30,8 +34,12 @@ export async function PUT(
   try {
     await requireAdmin()
     const { id } = await params
+    const bookId = Number(id)
+    if (isNaN(bookId)) {
+      return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
+    }
     const body = await req.json()
-    const book = await updateAdminBook(id, body)
+    const book = await updateAdminBook(bookId, body)
     return NextResponse.json({ book })
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthorized: admin access required') {
@@ -53,21 +61,23 @@ export async function DELETE(
     const source = searchParams.get('source')
 
     if (source === 'seed') {
-      // Seed book deletion — need slug from query param
       const slug = searchParams.get('slug')
       if (!slug) {
         return NextResponse.json({ error: 'slug is required for seed book deletion' }, { status: 400 })
       }
       await deleteBookBySlug(slug)
-    } else if (source === 'admin') {
-      // Admin book — hard-delete
-      await deleteAdminBook(id)
     } else {
-      // Backward-compat: assume admin UUID if source not provided
-      try {
-        await deleteBookBySlug(searchParams.get('slug') || '')
-      } catch {
-        await deleteAdminBook(id)
+      const bookId = Number(id)
+      if (isNaN(bookId)) {
+        // Try slug-based deletion
+        const slug = searchParams.get('slug')
+        if (slug) {
+          await deleteBookBySlug(slug)
+        } else {
+          return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
+        }
+      } else {
+        await deleteAdminBook(bookId)
       }
     }
 

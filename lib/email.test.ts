@@ -2,14 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const originalEnv = process.env
 
-const { fn: mockSendMessage } = vi.hoisted(() => ({
-  fn: vi.fn().mockResolvedValue({ requestId: 'test-request-id' }),
+const { mockSendMessage, mockCourierConstructor } = vi.hoisted(() => ({
+  mockSendMessage: vi.fn().mockResolvedValue({ requestId: 'test-request-id' }),
+  mockCourierConstructor: vi.fn(),
 }))
 
 vi.mock('@trycourier/courier', () => {
   return {
     default: class MockedCourier {
-      constructor(_opts?: unknown) {}
+      constructor(opts?: unknown) {
+        mockCourierConstructor(opts)
+      }
       send = { message: mockSendMessage }
     }
   }
@@ -25,6 +28,7 @@ describe('lib/email', () => {
   beforeEach(() => {
     mockSendMessage.mockClear()
     mockSendMessage.mockResolvedValue({ requestId: 'test-request-id' })
+    mockCourierConstructor.mockClear()
   })
 
   it('sends password reset email with correct payload', async () => {
@@ -38,6 +42,18 @@ describe('lib/email', () => {
         routing: { method: 'single', channels: ['email'] },
       },
     })
+  })
+
+  it('uses a Render API key fallback when Courier key is absent', async () => {
+    const email = await loadEmailModule({
+      COURIER_API_KEY: undefined,
+      COURIER_TEMPLATE_PASSWORD_RESET: 'test-reset',
+      RENDERED_API_KEY: 'render-test-key',
+    })
+
+    await email.sendPasswordResetEmail('user@example.com', 'https://example.com/reset')
+
+    expect(mockCourierConstructor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'render-test-key' }))
   })
 
   it('throws CourierEmailError when Courier fails', async () => {

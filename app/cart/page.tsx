@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
 import { fetchCart } from '@/lib/library'
-import { SEED_BOOKS } from '@/lib/seed'
+import { getAllMergedBooks } from '@/lib/admin-books'
 import { formatPrice } from '@/lib/format'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -19,10 +19,15 @@ export default async function CartPage() {
   const user = await getCurrentUser()
   if (!user) redirect('/login')
 
-  const items = await fetchCart(user.id)
+  const [items, allBooks] = await Promise.all([
+    fetchCart(user.id),
+    getAllMergedBooks(),
+  ])
+
+  const bookMap = new Map(allBooks.map(b => [b.id, b]))
   const cartItems = items
     .map(i => {
-      const book = SEED_BOOKS.find(b => b.id === i.bookId)
+      const book = bookMap.get(i.bookId)
       return book ? { ...i, book } : null
     })
     .filter((b): b is NonNullable<typeof b> => b != null)

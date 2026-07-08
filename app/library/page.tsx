@@ -52,7 +52,7 @@ export default async function LibraryPage() {
         purchaseDate: new Date().toISOString(),
         released: true,
         releaseAt: null,
-        book: b as typeof b & { fileUrl?: string },
+        book: b,
       }))
 
     return (

@@ -23,7 +23,6 @@ export interface AuthUser {
   permissions: Permission[]
 }
 
-
 interface StoredUser {
   id: string
   name: string
@@ -235,7 +234,7 @@ export async function createUser(
   title?: string,
 ): Promise<{ id: string; name: string; email: string }> {
   const normalizedEmail = normalizeEmail(email)
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const existing = await db.select({ id: userTable.id })
@@ -255,14 +254,19 @@ export async function createUser(
       email: normalizedEmail,
       passwordHash,
       isAdmin,
+      role,
+      rank: rank ?? (isAdmin ? (role === 'master_admin' ? 'master' : 'junior') : undefined),
+      title: title ?? (isAdmin ? (role === 'master_admin' ? 'Master Admin' : undefined) : undefined),
+      permissions: serializePermissions(getDefaultPermissions(role)),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
 
     return { id, name: name.trim(), email: normalizedEmail }
   }
 
-  // Fall back to in-memory
+  // Fall back to in-memory for development
   const store = getStore()
-
   if (store.emailIndex.has(normalizedEmail)) {
     throw new Error('An account with this email already exists')
   }
@@ -279,7 +283,7 @@ export async function createUser(
     rank: rank ?? (isAdmin ? (role === 'master_admin' ? 'master' : 'junior') : undefined),
     title,
     showFullName: false,
-    permissions: getDefaultPermissions(role as UserRole),
+    permissions: getDefaultPermissions(role),
   }
 
   store.users.set(id, user)
@@ -294,7 +298,7 @@ export async function authenticateUser(
   password: string,
 ): Promise<{ id: string; name: string; email: string; isAdmin: boolean; role: UserRole; rank?: AdminRank; title?: string; permissions: Permission[] } | null> {
   const normalizedEmail = normalizeEmail(email)
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const rows = await db.select({
@@ -313,7 +317,6 @@ export async function authenticateUser(
       .limit(1)
 
     if (rows.length === 0) return null
-
     const user = rows[0]
     if (!user.passwordHash) return null
 
@@ -321,7 +324,6 @@ export async function authenticateUser(
     if (!valid) return null
 
     const role = (user.role as UserRole) || (user.isAdmin ? 'master_admin' : 'user')
-
     return {
       id: user.id,
       name: user.name,
@@ -338,7 +340,6 @@ export async function authenticateUser(
   const store = getStore()
   const userId = store.emailIndex.get(normalizedEmail)
   if (!userId) return null
-
   const user = store.users.get(userId)
   if (!user) return null
 
@@ -349,7 +350,7 @@ export async function authenticateUser(
 }
 
 export async function createSession(userId: string): Promise<string> {
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const rows = await db.select({
@@ -413,7 +414,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
   const userId = payload.userId as string
 
-  const db = getDb()
+  const db = await getDb()
   if (db) {
     const rows = await db.select({
       id: userTable.id,
@@ -492,7 +493,7 @@ export function verifyResetToken(token: string): string | null {
 
 export async function updatePassword(email: string, newPassword: string): Promise<boolean> {
   const normalizedEmail = normalizeEmail(email)
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const passwordHash = hashPassword(newPassword)
@@ -502,11 +503,9 @@ export async function updatePassword(email: string, newPassword: string): Promis
     return true
   }
 
-  // Fall back to in-memory
   const store = getStore()
   const userId = store.emailIndex.get(normalizedEmail)
   if (!userId) return false
-
   const user = store.users.get(userId)
   if (!user) return false
 
@@ -520,7 +519,7 @@ export async function updateUser(
   updates: { name?: string; email?: string; username?: string; phone?: string; showFullName?: boolean }
 ): Promise<boolean> {
   const normalizedEmail = updates.email ? normalizeEmail(updates.email) : undefined
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const setValues: Record<string, unknown> = {}
@@ -568,7 +567,7 @@ export function verifyEmailToken(token: string): string | null {
 
 export async function markEmailVerified(email: string): Promise<void> {
   const normalizedEmail = normalizeEmail(email)
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     await db.update(userTable)
@@ -589,35 +588,32 @@ export async function markEmailVerified(email: string): Promise<void> {
 
 export async function getUserNameByEmail(email: string): Promise<string | null> {
   const normalizedEmail = normalizeEmail(email)
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const rows = await db.select({ name: userTable.name })
       .from(userTable)
       .where(eq(userTable.email, normalizedEmail))
       .limit(1)
-    if (rows.length === 0) return null
-    return rows[0].name
+    return rows.length > 0 ? rows[0].name : null
   }
 
   const store = getStore()
   const userId = store.emailIndex.get(normalizedEmail)
   if (!userId) return null
-  const user = store.users.get(userId)
-  return user?.name ?? null
+  return store.users.get(userId)?.name ?? null
 }
 
 export async function isEmailVerified(email: string): Promise<boolean> {
   const normalizedEmail = normalizeEmail(email)
-  const db = getDb()
+  const db = await getDb()
 
   if (db) {
     const rows = await db.select({ emailVerified: userTable.emailVerified })
       .from(userTable)
       .where(eq(userTable.email, normalizedEmail))
       .limit(1)
-    if (rows.length === 0) return false
-    return rows[0].emailVerified ?? false
+    return rows.length > 0 ? (rows[0].emailVerified ?? false) : false
   }
 
   return true
@@ -635,7 +631,6 @@ function seedAdminUser(store: AuthStore): void {
   const adminEmail = getAdminEmail()
   const normalizedEmail = normalizeEmail(adminEmail)
   const existingUserId = store.emailIndex.get(normalizedEmail)
-
   const passwordHash = hashPassword(getAdminPassword())
 
   if (existingUserId) {
@@ -677,7 +672,7 @@ export async function seedDbAdmin(): Promise<void> {
   _seedingDbAdmin = true
 
   try {
-    const db = getDb()
+    const db = await getDb()
     if (!db) return
 
     const adminEmail = getAdminEmail()
@@ -714,6 +709,8 @@ export async function seedDbAdmin(): Promise<void> {
       rank: 'master',
       title: 'Master Admin',
       permissions: serializePermissions(getDefaultPermissions('master_admin')),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     }).catch(() => {
       // Race condition: another instance seeded first, that is fine
     })
@@ -797,7 +794,7 @@ function mapDbUser(u: {
 }
 
 export async function listAllUsers(): Promise<AdminUserListItem[]> {
-  const db = getDb()
+  const db = await getDb()
   if (db) {
     const rows = await db.select({
       id: userTable.id,
@@ -832,7 +829,7 @@ export async function listAllUsers(): Promise<AdminUserListItem[]> {
 }
 
 export async function getUserById(id: string): Promise<AdminUserListItem | null> {
-  const db = getDb()
+  const db = await getDb()
   if (db) {
     const rows = await db.select({
       id: userTable.id,
@@ -864,7 +861,7 @@ export async function getUserById(id: string): Promise<AdminUserListItem | null>
 }
 
 export async function setUserAdmin(id: string, updates: AdminUserUpdate): Promise<AdminUserListItem> {
-  const db = getDb()
+  const db = await getDb()
   if (db) {
     const existing = await db.select({ id: userTable.id, role: userTable.role })
       .from(userTable)
@@ -882,6 +879,7 @@ export async function setUserAdmin(id: string, updates: AdminUserUpdate): Promis
     if (updates.permissions !== undefined) setValues.permissions = serializePermissions(updates.permissions)
 
     if (Object.keys(setValues).length > 0) {
+      setValues.updatedAt = new Date()
       await db.update(userTable).set(setValues).where(eq(userTable.id, id))
     }
     const updated = await getUserById(id)

@@ -11,9 +11,9 @@ let client: Courier | null = null
 
 function getClient(): Courier {
   if (!client) {
-    const apiKey = process.env.COURIER_API_KEY
+    const apiKey = process.env.COURIER_API_KEY || process.env.RENDERED_API_KEY
     if (!apiKey) {
-      throw new CourierEmailError('[courier] COURIER_API_KEY is not configured')
+      throw new CourierEmailError('[courier] COURIER_API_KEY or RENDERED_API_KEY is not configured')
     }
     client = new Courier({
       apiKey,

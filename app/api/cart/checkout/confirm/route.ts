@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { verifyPaystackPayment } from '@/lib/paystack'
 import { recordPurchase, removeFromCart, fetchCart } from '@/lib/library'
+import { getAllMergedBooks } from '@/lib/admin-books'
 import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
 import { formatPrice } from '@/lib/format'
-import { SEED_BOOKS } from '@/lib/seed'
 
 export async function POST(req: Request) {
   const user = await getCurrentUser()
@@ -27,15 +27,21 @@ export async function POST(req: Request) {
       : user.name ?? 'Valued Customer'
     const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
 
-    const items = await fetchCart(user.id)
+    const [items, allBooks] = await Promise.all([
+      fetchCart(user.id),
+      getAllMergedBooks(),
+    ])
+
     if (items.length === 0) {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
     }
 
+    const bookMap = new Map(allBooks.map(b => [b.id, b]))
+
     const errors: string[] = []
     for (const item of items) {
       try {
-        const book = SEED_BOOKS.find(b => b.id === item.bookId)
+        const book = bookMap.get(item.bookId)
         await recordPurchase(user.id, item.bookId, book?.slug ?? '', ref)
         await removeFromCart(user.id, item.bookId)
       } catch (e) {
@@ -44,7 +50,7 @@ export async function POST(req: Request) {
     }
 
     const purchasedBooks = items
-      .map(i => SEED_BOOKS.find(b => b.id === i.bookId))
+      .map(i => bookMap.get(i.bookId))
       .filter((b): b is NonNullable<typeof b> => b != null)
 
     const emailTo = customerEmail ?? user.email

@@ -1,6 +1,6 @@
 import Courier from '@trycourier/courier'
 
-const client = new Courier({ apiKey: process.env.COURIER_API_KEY })
+const client = new Courier({ apiKey: process.env.COURIER_API_KEY || process.env.RENDERED_API_KEY })
 
 const templateConfigs = [
   {

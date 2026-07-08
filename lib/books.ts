@@ -1,14 +1,19 @@
 import 'server-only'
-import { type SeedBook } from '@/lib/seed'
-import { getAllMergedBooks } from '@/lib/admin-books'
+import { eq, and, desc, asc, sql, ne } from 'drizzle-orm'
+import { getDb } from '@/lib/db/connection'
+import { books, type Book } from '@/lib/db/schema'
+import { cacheWrapper } from '@/lib/db/cache'
+import { CATEGORIES } from '@/lib/constants'
 
-export type Book = SeedBook & { archived?: boolean }
+export { CATEGORIES }
 
-export { CATEGORIES } from '@/lib/constants'
+export type { Book }
 
-function matchesQuery(book: { title: string; author: string; tagline?: string | boolean }, q: string): boolean {
+const CACHE_PREFIX = 'books'
+
+function matchesQuery(book: { title: string; author: string; tagline?: string | null }, q: string): boolean {
   const query = q.toLowerCase()
-  const tagline = typeof book.tagline === 'string' ? book.tagline : ''
+  const tagline = book.tagline ?? ''
   return (
     book.title.toLowerCase().includes(query) ||
     book.author.toLowerCase().includes(query) ||
@@ -17,21 +22,31 @@ function matchesQuery(book: { title: string; author: string; tagline?: string | 
 }
 
 export async function getFeaturedBooks(limit = 6): Promise<Book[]> {
-  const merged = await getAllMergedBooks()
-  const featured = merged
-    .filter((b) => b.featured)
-    .sort((a, b) => b.reviewsCount - a.reviewsCount)
-    .slice(0, limit)
-  return featured as Book[]
+  const db = await getDb()
+  if (!db) return []
+
+  return cacheWrapper(`${CACHE_PREFIX}:featured:${limit}`, async () => {
+    const rows = await db.select()
+      .from(books)
+      .where(and(eq(books.featured, true), eq(books.deleted, false), eq(books.archived, false)))
+      .orderBy(desc(books.reviewsCount))
+      .limit(limit)
+    return rows
+  }, 60_000)
 }
 
 export async function getBestsellers(limit = 4): Promise<Book[]> {
-  const merged = await getAllMergedBooks()
-  const bestsellers = merged
-    .filter((b) => b.bestseller)
-    .sort((a, b) => Number(b.rating) - Number(a.rating))
-    .slice(0, limit)
-  return bestsellers as Book[]
+  const db = await getDb()
+  if (!db) return []
+
+  return cacheWrapper(`${CACHE_PREFIX}:bestsellers:${limit}`, async () => {
+    const rows = await db.select()
+      .from(books)
+      .where(and(eq(books.bestseller, true), eq(books.deleted, false), eq(books.archived, false)))
+      .orderBy(desc(books.rating))
+      .limit(limit)
+    return rows
+  }, 60_000)
 }
 
 export async function getAllBooks(opts?: {
@@ -39,24 +54,54 @@ export async function getAllBooks(opts?: {
   category?: string
   sort?: 'popular' | 'newest' | 'price-asc' | 'price-desc'
 }): Promise<Book[]> {
-  const merged = await getAllMergedBooks()
-  let results = [...merged]
+  const db = await getDb()
+  if (!db) return []
+
+  const conditions = [eq(books.deleted, false), eq(books.archived, false)]
+
+  if (opts?.category && opts.category !== 'All') {
+    conditions.push(eq(books.category, opts.category as Book['category']))
+  }
+
+  if (opts?.q) {
+    const query = opts.q.toLowerCase()
+    const rows = await db.select()
+      .from(books)
+      .where(and(...conditions))
+    return filterAndSort(rows, opts)
+  }
+
+  let orderBy = desc(books.reviewsCount)
+  switch (opts?.sort) {
+    case 'newest':
+      orderBy = desc(books.createdAt)
+      break
+    case 'price-asc':
+      orderBy = asc(books.price)
+      break
+    case 'price-desc':
+      orderBy = desc(books.price)
+      break
+  }
+
+  const rows = await db.select()
+    .from(books)
+    .where(and(...conditions))
+    .orderBy(orderBy)
+
+  return rows
+}
+
+function filterAndSort(rows: Book[], opts?: { q?: string; sort?: 'popular' | 'newest' | 'price-asc' | 'price-desc' }): Book[] {
+  let results = [...rows]
 
   if (opts?.q) {
     results = results.filter((b) => matchesQuery(b, opts.q!))
   }
 
-  if (opts?.category && opts.category !== 'All') {
-    results = results.filter((b) => b.category === opts.category)
-  }
-
   switch (opts?.sort) {
     case 'newest':
-      results.sort((a, b) => {
-        const aDate = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()
-        const bDate = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()
-        return bDate - aDate
-      })
+      results.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       break
     case 'price-asc':
       results.sort((a, b) => Number(a.price) - Number(b.price))
@@ -68,14 +113,21 @@ export async function getAllBooks(opts?: {
       results.sort((a, b) => b.reviewsCount - a.reviewsCount)
   }
 
-  return results as Book[]
+  return results
 }
 
 export async function getBookBySlug(slug: string): Promise<Book | undefined> {
-  const merged = await getAllMergedBooks()
-  const book = merged.find((b) => b.slug === slug)
-  if (book && (book as unknown as { archived?: boolean }).archived) return undefined
-  return book as Book | undefined
+  const db = await getDb()
+  if (!db) return undefined
+
+  const rows = await db.select()
+    .from(books)
+    .where(and(eq(books.slug, slug), eq(books.deleted, false)))
+    .limit(1)
+
+  if (rows.length === 0) return undefined
+  if (rows[0].archived) return undefined
+  return rows[0]
 }
 
 export async function getRelatedBooks(
@@ -83,17 +135,37 @@ export async function getRelatedBooks(
   excludeSlug: string,
   limit = 3,
 ): Promise<Book[]> {
-  const merged = await getAllMergedBooks()
-  return merged
-    .filter((b) => b.category === category && b.slug !== excludeSlug && !(b as unknown as { archived?: boolean }).archived)
-    .slice(0, limit) as Book[]
+  const db = await getDb()
+  if (!db) return []
+
+  const rows = await db.select()
+    .from(books)
+    .where(and(
+      eq(books.category, category as Book['category']),
+      ne(books.slug, excludeSlug),
+      eq(books.deleted, false),
+      eq(books.archived, false),
+    ))
+    .limit(limit)
+
+  return rows
 }
 
 export async function getCategoryCounts(): Promise<Record<string, number>> {
-  const merged = await getAllMergedBooks()
+  const db = await getDb()
+  if (!db) return {}
+
+  const rows = await db.select({
+    category: books.category,
+    count: sql<number>`count(*)::int`,
+  })
+    .from(books)
+    .where(and(eq(books.deleted, false), eq(books.archived, false)))
+    .groupBy(books.category)
+
   const counts: Record<string, number> = {}
-  for (const b of merged) {
-    counts[b.category] = (counts[b.category] || 0) + 1
+  for (const r of rows) {
+    counts[r.category] = r.count
   }
   return counts
 }

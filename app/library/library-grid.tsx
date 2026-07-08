@@ -17,7 +17,7 @@ interface BookInfo {
   price: string
   currency: string
   coverImage: string
-  fileUrl?: string
+  fileUrl: string | null
   tagline?: string
   rating?: string
   featured?: boolean
