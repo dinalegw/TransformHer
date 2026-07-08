@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
-import { requireMasterAdmin, getUsersStore, saveUsersStore } from '@/lib/auth'
+import {
+  requireMasterAdmin,
+  getUserById,
+  setUserAdmin,
+  demoteUserToRegular,
+} from '@/lib/auth'
 import { getDefaultPermissions, ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
 
 export async function PUT(
@@ -10,42 +15,52 @@ export async function PUT(
     await requireMasterAdmin()
     const { id } = await params
     const body = await req.json()
-    const store = getUsersStore()
 
-    const user = store.users.get(id)
+    const user = await getUserById(id)
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
+
+    const updates: {
+      role?: 'user' | 'admin' | 'master_admin'
+      rank?: 'junior' | 'senior' | 'lead' | 'master'
+      title?: string
+      permissions?: Permission[]
+    } = {}
 
     if (body.role !== undefined) {
       if (body.role === 'master_admin' && user.role !== 'master_admin') {
         return NextResponse.json({ error: 'Cannot promote to master admin' }, { status: 400 })
       }
-      user.role = body.role
-      user.isAdmin = body.role === 'admin' || body.role === 'master_admin'
-      if (body.role === 'admin' && !user.permissions?.length) {
-        user.permissions = getDefaultPermissions('admin')
+      updates.role = body.role
+      if (body.rank !== undefined) updates.rank = body.rank
+      if (body.title !== undefined) updates.title = body.title
+      if (body.role === 'admin' && !body.permissions) {
+        updates.permissions = getDefaultPermissions('admin')
       }
+    } else {
+      if (body.rank !== undefined) updates.rank = body.rank
+      if (body.title !== undefined) updates.title = body.title
     }
-    if (body.rank !== undefined) user.rank = body.rank
-    if (body.title !== undefined) user.title = body.title
+
     if (body.permissions !== undefined) {
       if (user.role === 'master_admin') {
         return NextResponse.json({ error: 'Cannot modify master admin permissions' }, { status: 400 })
       }
       const validPerms = body.permissions.filter((p: string) => ALL_PERMISSIONS.includes(p as Permission))
-      user.permissions = validPerms
+      updates.permissions = validPerms
     }
 
-    saveUsersStore()
+    const updated = await setUserAdmin(id, updates)
+
     return NextResponse.json({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      rank: user.rank,
-      title: user.title,
-      permissions: user.permissions,
+      id: updated.id,
+      name: updated.name,
+      email: updated.email,
+      role: updated.role,
+      rank: updated.rank,
+      title: updated.title,
+      permissions: updated.permissions,
     })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
@@ -63,9 +78,8 @@ export async function DELETE(
   try {
     await requireMasterAdmin()
     const { id } = await params
-    const store = getUsersStore()
 
-    const user = store.users.get(id)
+    const user = await getUserById(id)
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -74,13 +88,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot remove master admin' }, { status: 400 })
     }
 
-    user.isAdmin = false
-    user.role = 'user'
-    user.rank = undefined
-    user.title = undefined
-    user.permissions = []
-
-    saveUsersStore()
+    await demoteUserToRegular(id)
     return NextResponse.json({ success: true })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {

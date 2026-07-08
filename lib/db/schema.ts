@@ -23,6 +23,10 @@ export const user = pgTable('user', {
   username: text('username'),
   phone: text('phone'),
   showFullName: boolean('show_full_name').notNull().default(false),
+  role: text('role').notNull().default('user'),
+  rank: text('rank'),
+  title: text('title'),
+  permissions: text('permissions').notNull().default('[]'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

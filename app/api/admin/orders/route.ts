@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireAdmin, getUsersStore } from '@/lib/auth'
+import { requireAdmin, listAllUsers } from '@/lib/auth'
 import { getAllMergedBooks } from '@/lib/admin-books'
 import { fetchLibrary, releaseLibraryItem } from '@/lib/library'
 import { hasPermission } from '@/lib/permissions'

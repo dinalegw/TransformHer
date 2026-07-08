@@ -47,6 +47,22 @@ async function migrate() {
     `)
 
     await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+    `)
+
+    await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "rank" TEXT;
+    `)
+
+    await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS title TEXT;
+    `)
+
+    await client.query(`
+      ALTER TABLE "user" ADD COLUMN IF NOT EXISTS permissions TEXT NOT NULL DEFAULT '[]';
+    `)
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS books (
         id SERIAL PRIMARY KEY,
         slug TEXT NOT NULL UNIQUE,

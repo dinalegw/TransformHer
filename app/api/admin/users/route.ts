@@ -1,21 +1,10 @@
 import { NextResponse } from 'next/server'
-import { requireMasterAdmin, getUsersStore } from '@/lib/auth'
+import { requireMasterAdmin, listAllUsers } from '@/lib/auth'
 
 export async function GET() {
   try {
     await requireMasterAdmin()
-    const store = getUsersStore()
-    const users = Array.from(store.users.values()).map(u => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      isAdmin: u.isAdmin,
-      role: u.role,
-      rank: u.rank,
-      title: u.title,
-      username: u.username,
-      permissions: u.permissions,
-    }))
+    const users = await listAllUsers()
     return NextResponse.json({ users, total: users.length })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {

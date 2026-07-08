@@ -182,6 +182,23 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
+function serializePermissions(permissions: Permission[] | undefined): string {
+  return JSON.stringify(Array.isArray(permissions) ? permissions : [])
+}
+
+function parsePermissions(raw: unknown): Permission[] {
+  if (Array.isArray(raw)) return raw as Permission[]
+  if (typeof raw === 'string' && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? (parsed as Permission[]) : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
 export function validateEmail(email: string): string | null {
   if (!email || typeof email !== 'string') return 'Email is required'
   const trimmed = email.trim()
@@ -297,13 +314,17 @@ export async function authenticateUser(
     const valid = verifyPassword(password, user.passwordHash)
     if (!valid) return null
 
+    const role = (user.role as UserRole) || (user.isAdmin ? 'master_admin' : 'user')
+
     return {
       id: user.id,
       name: user.name,
       email: user.email,
       isAdmin: user.isAdmin ?? false,
-      role: user.isAdmin ? 'master_admin' : 'user',
-      permissions: [],
+      role,
+      rank: user.rank as AdminRank | undefined,
+      title: user.title ?? undefined,
+      permissions: parsePermissions(user.permissions),
     }
   }
 
@@ -343,8 +364,10 @@ export async function createSession(userId: string): Promise<string> {
       name: u.name,
       email: u.email,
       isAdmin: u.isAdmin ?? false,
-      role: u.isAdmin ? 'master_admin' : 'user',
-      permissions: [],
+      role: (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user'),
+      rank: u.rank,
+      title: u.title,
+      permissions: parsePermissions(u.permissions),
       exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
     })
   }
@@ -397,16 +420,19 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     if (rows.length === 0) return null
     const u = rows[0]
+    const role = (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user')
     return {
       id: u.id,
       name: u.name,
       email: u.email,
       isAdmin: u.isAdmin ?? false,
-      role: u.isAdmin ? 'master_admin' : 'user',
+      role,
+      rank: u.rank as AdminRank | undefined,
+      title: u.title ?? undefined,
       username: u.username ?? undefined,
       phone: u.phone ?? undefined,
       showFullName: u.showFullName ?? false,
-      permissions: [],
+      permissions: parsePermissions(u.permissions),
     }
   }
 
@@ -651,7 +677,14 @@ export async function seedDbAdmin(): Promise<void> {
 
     if (existing.length > 0) {
       await db.update(userTable)
-        .set({ isAdmin: true, passwordHash })
+        .set({
+          isAdmin: true,
+          passwordHash,
+          role: 'master_admin',
+          rank: 'master',
+          title: 'Master Admin',
+          permissions: serializePermissions(getDefaultPermissions('master_admin')),
+        })
         .where(eq(userTable.email, normalizedEmail))
       return
     }
@@ -663,6 +696,10 @@ export async function seedDbAdmin(): Promise<void> {
       email: normalizedEmail,
       passwordHash,
       isAdmin: true,
+      role: 'master_admin',
+      rank: 'master',
+      title: 'Master Admin',
+      permissions: serializePermissions(getDefaultPermissions('master_admin')),
     }).catch(() => {
       // Race condition: another instance seeded first, that is fine
     })
@@ -696,10 +733,173 @@ export async function getAdminUser(): Promise<AuthUser | null> {
 
 /* ─── Admin user management ──────────────────────────────────────────── */
 
-export function getUsersStore() {
-  return getStore()
+export interface AdminUserListItem {
+  id: string
+  name: string
+  email: string
+  isAdmin: boolean
+  role: UserRole
+  rank?: AdminRank
+  title?: string
+  username?: string
+  phone?: string
+  showFullName: boolean
+  permissions: Permission[]
 }
 
-export function saveUsersStore(): void {
+export interface AdminUserUpdate {
+  role?: UserRole
+  rank?: AdminRank
+  title?: string
+  permissions?: Permission[]
+}
+
+function mapDbUser(u: {
+  id: string
+  name: string
+  email: string
+  isAdmin: boolean | null
+  role?: string | null
+  rank?: string | null
+  title?: string | null
+  username?: string | null
+  phone?: string | null
+  showFullName?: boolean | null
+  permissions?: unknown
+}): AdminUserListItem {
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    isAdmin: u.isAdmin ?? false,
+    role: (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user'),
+    rank: u.rank as AdminRank | undefined,
+    title: u.title ?? undefined,
+    username: u.username ?? undefined,
+    phone: u.phone ?? undefined,
+    showFullName: u.showFullName ?? false,
+    permissions: parsePermissions(u.permissions),
+  }
+}
+
+export async function listAllUsers(): Promise<AdminUserListItem[]> {
+  const db = getDb()
+  if (db) {
+    const rows = await db.select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      isAdmin: userTable.isAdmin,
+      role: userTable.role,
+      rank: userTable.rank,
+      title: userTable.title,
+      username: userTable.username,
+      phone: userTable.phone,
+      showFullName: userTable.showFullName,
+      permissions: userTable.permissions,
+    }).from(userTable)
+    return rows.map(mapDbUser)
+  }
+
+  const store = getStore()
+  return Array.from(store.users.values()).map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    isAdmin: u.isAdmin,
+    role: u.role,
+    rank: u.rank,
+    title: u.title,
+    username: u.username,
+    phone: u.phone,
+    showFullName: u.showFullName ?? false,
+    permissions: u.permissions,
+  }))
+}
+
+export async function getUserById(id: string): Promise<AdminUserListItem | null> {
+  const db = getDb()
+  if (db) {
+    const rows = await db.select({
+      id: userTable.id,
+      name: userTable.name,
+      email: userTable.email,
+      isAdmin: userTable.isAdmin,
+      role: userTable.role,
+      rank: userTable.rank,
+      title: userTable.title,
+      username: userTable.username,
+      phone: userTable.phone,
+      showFullName: userTable.showFullName,
+      permissions: userTable.permissions,
+    })
+      .from(userTable)
+      .where(eq(userTable.id, id))
+      .limit(1)
+    return rows.length > 0 ? mapDbUser(rows[0]) : null
+  }
+
+  const store = getStore()
+  const u = store.users.get(id)
+  if (!u) return null
+  return {
+    id: u.id, name: u.name, email: u.email, isAdmin: u.isAdmin, role: u.role,
+    rank: u.rank, title: u.title, username: u.username, phone: u.phone,
+    showFullName: u.showFullName ?? false, permissions: u.permissions,
+  }
+}
+
+export async function setUserAdmin(id: string, updates: AdminUserUpdate): Promise<AdminUserListItem> {
+  const db = getDb()
+  if (db) {
+    const existing = await db.select({ id: userTable.id, role: userTable.role })
+      .from(userTable)
+      .where(eq(userTable.id, id))
+      .limit(1)
+    if (existing.length === 0) throw new Error('User not found')
+
+    const setValues: Record<string, unknown> = {}
+    if (updates.role !== undefined) {
+      setValues.role = updates.role
+      setValues.isAdmin = updates.role === 'admin' || updates.role === 'master_admin'
+    }
+    if (updates.rank !== undefined) setValues.rank = updates.rank
+    if (updates.title !== undefined) setValues.title = updates.title || null
+    if (updates.permissions !== undefined) setValues.permissions = serializePermissions(updates.permissions)
+
+    if (Object.keys(setValues).length > 0) {
+      await db.update(userTable).set(setValues).where(eq(userTable.id, id))
+    }
+    const updated = await getUserById(id)
+    if (!updated) throw new Error('User not found')
+    return updated
+  }
+
+  const store = getStore()
+  const user = store.users.get(id)
+  if (!user) throw new Error('User not found')
+
+  if (updates.role !== undefined) {
+    user.role = updates.role
+    user.isAdmin = updates.role === 'admin' || updates.role === 'master_admin'
+  }
+  if (updates.rank !== undefined) user.rank = updates.rank
+  if (updates.title !== undefined) user.title = updates.title
+  if (updates.permissions !== undefined) user.permissions = updates.permissions
+
   persistStore()
+  return {
+    id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, role: user.role,
+    rank: user.rank, title: user.title, username: user.username, phone: user.phone,
+    showFullName: user.showFullName ?? false, permissions: user.permissions,
+  }
+}
+
+export async function demoteUserToRegular(id: string): Promise<void> {
+  await setUserAdmin(id, {
+    role: 'user',
+    rank: undefined,
+    title: undefined,
+    permissions: [],
+  })
 }

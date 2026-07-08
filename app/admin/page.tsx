@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
-import { getCurrentUser } from '@/lib/auth'
+import { getCurrentUser, listAllUsers } from '@/lib/auth'
 import { getAllMergedBooks, countPendingChanges } from '@/lib/admin-books'
-import { getUsersStore } from '@/lib/auth'
 import { AdminDashboardClient } from './dashboard-client'
 
 export const metadata: Metadata = {
@@ -16,8 +15,7 @@ export default async function AdminDashboardPage() {
     countPendingChanges(),
   ])
 
-  const store = getUsersStore()
-  const allUsers = Array.from(store.users.values())
+  const allUsers = await listAllUsers()
   const totalUsers = allUsers.length
   const totalAdmins = allUsers.filter(u => u.isAdmin).length
   const activeBooks = books.filter(b => !b.archived).length
