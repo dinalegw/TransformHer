@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { fetchCart } from '@/lib/library'
 import { initializePaystackPayment } from '@/lib/paystack'
-import { SEED_BOOKS } from '@/lib/seed'
+import { getAllMergedBooks } from '@/lib/admin-books'
 import { getBaseUrl } from '@/lib/utils'
 
 export async function POST() {
@@ -15,13 +15,14 @@ export async function POST() {
       return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
     }
 
+    const allBooks = await getAllMergedBooks()
     const cartBooks = items
-      .map(i => SEED_BOOKS.find(b => b.id === i.bookId))
+      .map(i => allBooks.find(b => b.id === i.bookId))
       .filter((b): b is NonNullable<typeof b> => b != null)
 
     const totalKobo = cartBooks.reduce((sum, b) => sum + Number(b.price), 0)
-
     const reference = `CART-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
+
     const result = await initializePaystackPayment({
       email: user.email,
       amount: totalKobo,

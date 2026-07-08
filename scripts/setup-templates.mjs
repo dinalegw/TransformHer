@@ -1,6 +1,6 @@
 import Courier from '@trycourier/courier'
 
-const client = new Courier({ apiKey: process.env.COURIER_API_KEY })
+const client = new Courier({ apiKey: process.env.COURIER_API_KEY || process.env.RENDERED_API_KEY })
 
 const templateConfigs = [
   {
@@ -174,7 +174,7 @@ async function main() {
           name: cfg.name,
           tags: cfg.tags,
           brand: null,
-          routing: null,
+          routing: { strategy_id: 'rs_01kx0kez9df6ev61ayp74r3n0g' },
           subscription: null,
           content: {
             version: '2022-01-01',

@@ -1,39 +1,19 @@
 import 'server-only'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { join } from 'path'
 import { randomUUID } from 'crypto'
-import { SEED_BOOKS, type SeedBook } from '@/lib/seed'
+import { eq, and, desc, asc, sql, ne, or } from 'drizzle-orm'
+import { getDb } from '@/lib/db/connection'
+import { books, pendingChanges, type Book, type NewBook } from '@/lib/db/schema'
+import { invalidateCache, cacheWrapper } from '@/lib/db/cache'
 import { deleteBookFile } from '@/lib/storage'
 
-export interface AdminBook {
-  id: string
-  slug: string
-  title: string
-  author: string
-  category: string
-  price: string
-  currency: string
-  coverImage: string
-  fileUrl?: string
-  tagline: string
-  description: string
-  rating: string
-  reviewsCount: number
-  pages: number
-  featured: boolean
-  bestseller: boolean
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  deleted?: boolean
-}
+export type { Book, NewBook }
 
 export interface PendingChange {
   id: string
   bookSlug: string
   bookTitle: string
   type: 'create' | 'update' | 'delete' | 'archive'
-  changes: Partial<AdminBook>
+  changes: Partial<Book>
   submittedBy: string
   submittedByEmail: string
   submittedAt: string
@@ -42,47 +22,7 @@ export interface PendingChange {
   reviewedAt?: string
 }
 
-interface AdminBooksStore {
-  books: AdminBook[]
-  pendingChanges: PendingChange[]
-}
-
-function getDataDir(): string {
-  return join(process.cwd(), 'data')
-}
-
-function getBooksFile(): string {
-  return join(getDataDir(), 'books.json')
-}
-
-function loadStore(): AdminBooksStore {
-  try {
-    const file = getBooksFile()
-    if (existsSync(file)) {
-      const raw = readFileSync(file, 'utf-8')
-      const data = JSON.parse(raw)
-      return {
-        books: Array.isArray(data.books) ? data.books : [],
-        pendingChanges: Array.isArray(data.pendingChanges) ? data.pendingChanges : [],
-      }
-    }
-  } catch {
-    // corrupt file, start fresh
-  }
-  return { books: [], pendingChanges: [] }
-}
-
-function saveStore(store: AdminBooksStore): void {
-  try {
-    const dir = getDataDir()
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    writeFileSync(getBooksFile(), JSON.stringify(store, null, 2), 'utf-8')
-  } catch {
-    // silently fail – data is still in memory
-  }
-}
+const CACHE_PREFIX = 'admin_books'
 
 function generateSlug(title: string): string {
   return title
@@ -91,144 +31,150 @@ function generateSlug(title: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-function normalizeAdminBook(book: Omit<AdminBook, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): AdminBook {
-  return {
-    id: book.id || randomUUID(),
-    slug: book.slug || generateSlug(book.title),
-    title: book.title,
-    author: book.author,
-    category: book.category,
-    price: book.price,
-    currency: book.currency || 'NGN',
-    coverImage: book.coverImage,
-    fileUrl: book.fileUrl,
-    tagline: book.tagline || '',
-    description: book.description || '',
-    rating: book.rating || '5.0',
-    reviewsCount: book.reviewsCount || 0,
-    pages: book.pages || 0,
-    featured: book.featured ?? false,
-    bestseller: book.bestseller ?? false,
-    archived: book.archived ?? false,
-    createdAt: book.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    deleted: book.deleted ?? false,
-  }
-}
-
 /* ------------------------------------------------------------------ */
 /* Books CRUD                                                          */
 /* ------------------------------------------------------------------ */
 
-export async function listAdminBooks(): Promise<AdminBook[]> {
-  const store = loadStore()
-  return store.books.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+export async function listAdminBooks(): Promise<Book[]> {
+  const db = await getDb()
+  if (!db) return []
+
+  return cacheWrapper(`${CACHE_PREFIX}:list`, async () => {
+    const rows = await db.select()
+      .from(books)
+      .where(eq(books.source, 'admin'))
+      .orderBy(desc(books.updatedAt))
+    return rows
+  }, 30_000)
 }
 
-export async function getAdminBook(id: string): Promise<AdminBook | undefined> {
-  const store = loadStore()
-  return store.books.find((b) => b.id === id)
+export async function getAdminBook(id: number): Promise<Book | undefined> {
+  const db = await getDb()
+  if (!db) return undefined
+
+  const rows = await db.select()
+    .from(books)
+    .where(and(eq(books.id, id), eq(books.source, 'admin')))
+    .limit(1)
+  return rows[0]
 }
 
-export async function findAdminBookBySlug(slug: string): Promise<AdminBook | undefined> {
-  const store = loadStore()
-  return store.books.find((b) => b.slug === slug)
+export async function findAdminBookBySlug(slug: string): Promise<Book | undefined> {
+  const db = await getDb()
+  if (!db) return undefined
+
+  const rows = await db.select()
+    .from(books)
+    .where(and(eq(books.slug, slug), eq(books.source, 'admin')))
+    .limit(1)
+  return rows[0]
 }
 
 export async function createAdminBook(
-  book: Omit<AdminBook, 'id' | 'createdAt' | 'updatedAt'>,
-): Promise<AdminBook> {
-  const slug = book.slug || generateSlug(book.title)
-  const store = loadStore()
+  book: Omit<NewBook, 'id' | 'createdAt' | 'updatedAt'>,
+): Promise<Book> {
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  if (store.books.some((b) => b.slug === slug && !b.deleted)) {
+  const slug = book.slug || generateSlug(book.title)
+
+  const existing = await db.select({ id: books.id })
+    .from(books)
+    .where(eq(books.slug, slug))
+    .limit(1)
+
+  if (existing.length > 0) {
     throw new Error('A book with this slug already exists')
   }
 
-  const normalized = normalizeAdminBook({ ...book, slug })
-  store.books.push(normalized)
-  saveStore(store)
-  return normalized
+  const now = new Date()
+  const [inserted] = await db.insert(books).values({
+    slug,
+    title: book.title,
+    author: book.author,
+    category: book.category as Book['category'],
+    price: book.price ?? '0',
+    currency: (book.currency ?? 'NGN') as Book['currency'],
+    coverImage: book.coverImage,
+    fileUrl: book.fileUrl,
+    tagline: book.tagline ?? '',
+    description: book.description ?? '',
+    rating: book.rating ?? '5.0',
+    reviewsCount: book.reviewsCount ?? 0,
+    pages: book.pages ?? 0,
+    featured: book.featured ?? false,
+    bestseller: book.bestseller ?? false,
+    source: 'admin',
+    archived: false,
+    deleted: false,
+    createdAt: now,
+    updatedAt: now,
+  }).returning()
+
+  invalidateCache(CACHE_PREFIX)
+  return inserted
 }
 
 export async function updateAdminBook(
-  id: string,
-  updates: Partial<Omit<AdminBook, 'id' | 'createdAt' | 'updatedAt'>>,
-): Promise<AdminBook> {
-  const store = loadStore()
-  const index = store.books.findIndex((b) => b.id === id)
-  if (index === -1) throw new Error('Book not found')
+  id: number,
+  updates: Partial<Omit<NewBook, 'id' | 'createdAt' | 'updatedAt'>>,
+): Promise<Book> {
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  const existing = store.books[index]
-  if (existing.deleted) throw new Error('Cannot update a deleted book')
+  const existing = await db.select().from(books).where(eq(books.id, id)).limit(1)
+  if (existing.length === 0) throw new Error('Book not found')
+  if (existing[0].deleted) throw new Error('Cannot update a deleted book')
 
-  const updated: AdminBook = {
-    ...existing,
-    ...updates,
-    id: existing.id,
-    createdAt: existing.createdAt,
-    updatedAt: new Date().toISOString(),
-  }
-
-  if (updates.slug && updates.slug !== existing.slug) {
-    if (store.books.some((b) => b.slug === updates.slug && b.id !== id)) {
+  if (updates.slug && updates.slug !== existing[0].slug) {
+    const slugExists = await db.select({ id: books.id })
+      .from(books)
+      .where(and(eq(books.slug, updates.slug), ne(books.id, id)))
+      .limit(1)
+    if (slugExists.length > 0) {
       throw new Error('A book with this slug already exists')
     }
   }
 
-  store.books[index] = updated
-  saveStore(store)
+  const [updated] = await db.update(books)
+    .set({ ...updates, updatedAt: new Date() })
+    .where(eq(books.id, id))
+    .returning()
+
+  invalidateCache(CACHE_PREFIX)
   return updated
 }
 
-export async function deleteAdminBook(id: string): Promise<void> {
-  const store = loadStore()
-  const index = store.books.findIndex((b) => b.id === id)
-  if (index === -1) throw new Error('Book not found')
+export async function deleteAdminBook(id: number): Promise<void> {
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  const book = store.books[index]
-  if (book.fileUrl) {
-    deleteBookFile(book.fileUrl)
+  const existing = await db.select().from(books).where(eq(books.id, id)).limit(1)
+  if (existing.length === 0) throw new Error('Book not found')
+
+  if (existing[0].fileUrl) {
+    deleteBookFile(existing[0].fileUrl)
   }
 
-  store.books.splice(index, 1)
-  saveStore(store)
+  await db.delete(books).where(eq(books.id, id))
+  invalidateCache(CACHE_PREFIX)
 }
 
 export async function deleteBookBySlug(slug: string): Promise<void> {
-  const store = loadStore()
-  const existingIndex = store.books.findIndex((b) => b.slug === slug)
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  if (existingIndex >= 0) {
-    // Soft-delete: mark as deleted but keep record (existing owners keep access)
-    store.books[existingIndex].deleted = true
-    store.books[existingIndex].archived = true
-    store.books[existingIndex].updatedAt = new Date().toISOString()
+  const existing = await db.select().from(books).where(eq(books.slug, slug)).limit(1)
+
+  if (existing.length > 0) {
+    await db.update(books)
+      .set({ deleted: true, archived: true, updatedAt: new Date() })
+      .where(eq(books.slug, slug))
   } else {
-    const seed = SEED_BOOKS.find((b) => b.slug === slug)
-    if (!seed) throw new Error('Book not found')
-
-    store.books.push(normalizeAdminBook({
-      slug,
-      title: seed.title,
-      author: seed.author,
-      category: seed.category,
-      price: seed.price,
-      currency: seed.currency,
-      coverImage: seed.coverImage,
-      tagline: seed.tagline,
-      description: seed.description,
-      rating: seed.rating,
-      reviewsCount: seed.reviewsCount,
-      pages: seed.pages,
-      featured: seed.featured,
-      bestseller: seed.bestseller,
-      deleted: true,
-      archived: true,
-    }))
+    throw new Error('Book not found')
   }
 
-  saveStore(store)
+  invalidateCache(CACHE_PREFIX)
 }
 
 /* ------------------------------------------------------------------ */
@@ -236,36 +182,17 @@ export async function deleteBookBySlug(slug: string): Promise<void> {
 /* ------------------------------------------------------------------ */
 
 export async function archiveBook(slug: string, archived: boolean): Promise<void> {
-  const store = loadStore()
-  const existingIndex = store.books.findIndex((b) => b.slug === slug)
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  if (existingIndex >= 0) {
-    store.books[existingIndex].archived = archived
-    store.books[existingIndex].updatedAt = new Date().toISOString()
-  } else {
-    const seed = SEED_BOOKS.find((b) => b.slug === slug)
-    if (!seed) throw new Error('Book not found')
+  const existing = await db.select({ id: books.id }).from(books).where(eq(books.slug, slug)).limit(1)
+  if (existing.length === 0) throw new Error('Book not found')
 
-    store.books.push(normalizeAdminBook({
-      slug,
-      title: seed.title,
-      author: seed.author,
-      category: seed.category,
-      price: seed.price,
-      currency: seed.currency,
-      coverImage: seed.coverImage,
-      tagline: seed.tagline,
-      description: seed.description,
-      rating: seed.rating,
-      reviewsCount: seed.reviewsCount,
-      pages: seed.pages,
-      featured: seed.featured,
-      bestseller: seed.bestseller,
-      archived,
-    }))
-  }
+  await db.update(books)
+    .set({ archived, updatedAt: new Date() })
+    .where(eq(books.slug, slug))
 
-  saveStore(store)
+  invalidateCache(CACHE_PREFIX)
 }
 
 /* ------------------------------------------------------------------ */
@@ -276,121 +203,181 @@ export async function submitPendingChange(
   type: PendingChange['type'],
   bookSlug: string,
   bookTitle: string,
-  changes: Partial<AdminBook>,
+  changes: Partial<Book>,
   submittedBy: string,
   submittedByEmail: string,
 ): Promise<PendingChange> {
-  const store = loadStore()
-  const change: PendingChange = {
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
+
+  const now = new Date()
+  const [inserted] = await db.insert(pendingChanges).values({
     id: randomUUID(),
     bookSlug,
     bookTitle,
-    type,
-    changes,
+    type: type as typeof pendingChanges.$inferInsert['type'],
+    changes: JSON.stringify(changes),
     submittedBy,
     submittedByEmail,
-    submittedAt: new Date().toISOString(),
+    submittedAt: now,
     status: 'pending',
+  }).returning()
+
+  return {
+    id: inserted.id,
+    bookSlug: inserted.bookSlug,
+    bookTitle: inserted.bookTitle,
+    type: inserted.type as PendingChange['type'],
+    changes: JSON.parse(inserted.changes),
+    submittedBy: inserted.submittedBy,
+    submittedByEmail: inserted.submittedByEmail,
+    submittedAt: inserted.submittedAt.toISOString(),
+    status: inserted.status as PendingChange['status'],
   }
-  store.pendingChanges.push(change)
-  saveStore(store)
-  return change
 }
 
 export async function approveChange(changeId: string, reviewedBy: string): Promise<PendingChange> {
-  const store = loadStore()
-  const index = store.pendingChanges.findIndex((c) => c.id === changeId)
-  if (index === -1) throw new Error('Pending change not found')
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  const change = store.pendingChanges[index]
-  if (change.status !== 'pending') throw new Error('Change already processed')
+  const existing = await db.select().from(pendingChanges).where(eq(pendingChanges.id, changeId)).limit(1)
+  if (existing.length === 0) throw new Error('Pending change not found')
+  if (existing[0].status !== 'pending') throw new Error('Change already processed')
 
-  change.status = 'approved'
-  change.reviewedBy = reviewedBy
-  change.reviewedAt = new Date().toISOString()
+  const change = existing[0]
+  const now = new Date()
 
-  // Apply the changes to the actual book
+  const parsedChanges = JSON.parse(change.changes) as Partial<Book>
+
   if (change.type === 'delete') {
     await deleteBookBySlug(change.bookSlug)
   } else if (change.type === 'archive') {
-    await archiveBook(change.bookSlug, change.changes.archived ?? true)
+    await archiveBook(change.bookSlug, parsedChanges.archived ?? true)
   } else {
-    // create or update: find or create the admin book entry
-    const existing = store.books.find((b) => b.slug === change.bookSlug)
-    if (existing) {
-      Object.assign(existing, change.changes, {
-        id: existing.id,
-        createdAt: existing.createdAt,
-        updatedAt: new Date().toISOString(),
-      })
+    const rows = await db.select().from(books).where(eq(books.slug, change.bookSlug)).limit(1)
+    if (rows.length > 0) {
+      await db.update(books)
+        .set({ ...parsedChanges, updatedAt: now })
+        .where(eq(books.slug, change.bookSlug))
     } else if (change.type === 'create') {
-      store.books.push(normalizeAdminBook(change.changes as Omit<AdminBook, 'id' | 'createdAt' | 'updatedAt'>))
+      await db.insert(books).values({
+        ...(parsedChanges as NewBook),
+        source: 'admin',
+        createdAt: now,
+        updatedAt: now,
+      })
     }
   }
 
-  store.pendingChanges[index] = change
-  saveStore(store)
-  return change
+  const [updated] = await db.update(pendingChanges)
+    .set({ status: 'approved', reviewedBy, reviewedAt: now })
+    .where(eq(pendingChanges.id, changeId))
+    .returning()
+
+  invalidateCache(CACHE_PREFIX)
+
+  return {
+    id: updated.id,
+    bookSlug: updated.bookSlug,
+    bookTitle: updated.bookTitle,
+    type: updated.type as PendingChange['type'],
+    changes: parsedChanges,
+    submittedBy: updated.submittedBy,
+    submittedByEmail: updated.submittedByEmail,
+    submittedAt: updated.submittedAt.toISOString(),
+    status: updated.status as PendingChange['status'],
+    reviewedBy: updated.reviewedBy ?? undefined,
+    reviewedAt: updated.reviewedAt?.toISOString(),
+  }
 }
 
 export async function rejectChange(changeId: string, reviewedBy: string): Promise<PendingChange> {
-  const store = loadStore()
-  const index = store.pendingChanges.findIndex((c) => c.id === changeId)
-  if (index === -1) throw new Error('Pending change not found')
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  const change = store.pendingChanges[index]
-  if (change.status !== 'pending') throw new Error('Change already processed')
+  const existing = await db.select().from(pendingChanges).where(eq(pendingChanges.id, changeId)).limit(1)
+  if (existing.length === 0) throw new Error('Pending change not found')
+  if (existing[0].status !== 'pending') throw new Error('Change already processed')
 
-  change.status = 'rejected'
-  change.reviewedBy = reviewedBy
-  change.reviewedAt = new Date().toISOString()
+  const now = new Date()
+  const [updated] = await db.update(pendingChanges)
+    .set({ status: 'rejected', reviewedBy, reviewedAt: now })
+    .where(eq(pendingChanges.id, changeId))
+    .returning()
 
-  store.pendingChanges[index] = change
-  saveStore(store)
-  return change
+  return {
+    id: updated.id,
+    bookSlug: updated.bookSlug,
+    bookTitle: updated.bookTitle,
+    type: updated.type as PendingChange['type'],
+    changes: JSON.parse(updated.changes),
+    submittedBy: updated.submittedBy,
+    submittedByEmail: updated.submittedByEmail,
+    submittedAt: updated.submittedAt.toISOString(),
+    status: updated.status as PendingChange['status'],
+    reviewedBy: updated.reviewedBy ?? undefined,
+    reviewedAt: updated.reviewedAt?.toISOString(),
+  }
 }
 
 export async function listPendingChanges(): Promise<PendingChange[]> {
-  const store = loadStore()
-  return store.pendingChanges
-    .filter((c) => c.status === 'pending')
-    .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+  const db = await getDb()
+  if (!db) return []
+
+  const rows = await db.select()
+    .from(pendingChanges)
+    .where(eq(pendingChanges.status, 'pending'))
+    .orderBy(desc(pendingChanges.submittedAt))
+
+  return rows.map(c => ({
+    id: c.id,
+    bookSlug: c.bookSlug,
+    bookTitle: c.bookTitle,
+    type: c.type as PendingChange['type'],
+    changes: JSON.parse(c.changes),
+    submittedBy: c.submittedBy,
+    submittedByEmail: c.submittedByEmail,
+    submittedAt: c.submittedAt.toISOString(),
+    status: c.status as PendingChange['status'],
+  }))
 }
 
 export async function countPendingChanges(): Promise<number> {
-  const store = loadStore()
-  return store.pendingChanges.filter((c) => c.status === 'pending').length
+  const db = await getDb()
+  if (!db) return 0
+
+  const [result] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(pendingChanges)
+    .where(eq(pendingChanges.status, 'pending'))
+
+  return result?.count ?? 0
 }
 
 /* ------------------------------------------------------------------ */
 /* Merged View                                                         */
 /* ------------------------------------------------------------------ */
 
-export type MergedBook = (SeedBook | AdminBook) & { source: 'seed' | 'admin' }
+export type MergedBook = Book & { source: 'seed' | 'admin' }
 
 export async function getAllMergedBooks(opts?: { includeArchived?: boolean }): Promise<MergedBook[]> {
-  const adminBooks = await listAdminBooks()
-  const deletedSlugs = new Set(adminBooks.filter((b) => b.deleted).map((b) => b.slug))
-  const archivedSlugs = new Set(adminBooks.filter((b) => !b.deleted && b.archived).map((b) => b.slug))
-  const activeAdminSlugs = new Set(adminBooks.filter((b) => !b.deleted && !b.archived).map((b) => b.slug))
+  const db = await getDb()
+  if (!db) return []
 
-  const seedWithSource: MergedBook[] = SEED_BOOKS
-    .filter((b) => !deletedSlugs.has(b.slug) && !archivedSlugs.has(b.slug) && !activeAdminSlugs.has(b.slug))
-    .map((b) => ({ ...b, source: 'seed' as const }))
+  const cacheKey = `${CACHE_PREFIX}:merged:${opts?.includeArchived ?? false}`
 
-  const adminWithSource: MergedBook[] = adminBooks
-    .filter((b) => !b.deleted && (opts?.includeArchived || !b.archived))
-    .map((b) => ({
-      ...b,
-      createdAt: new Date(b.createdAt),
-      source: 'admin' as const,
-    }))
+  return cacheWrapper(cacheKey, async () => {
+    const conditions = [eq(books.deleted, false)]
+    if (!opts?.includeArchived) {
+      conditions.push(eq(books.archived, false))
+    }
 
-  return [...seedWithSource, ...adminWithSource].sort((a, b) => {
-    const aDate = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime()
-    const bDate = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime()
-    return bDate - aDate
-  })
+    const rows = await db.select()
+      .from(books)
+      .where(and(...conditions))
+      .orderBy(desc(books.createdAt))
+
+    return rows as MergedBook[]
+  }, 30_000)
 }
 
 export const ADMIN_CATEGORIES = [

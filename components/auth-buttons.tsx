@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LogOut, User, Settings, BookOpen, ShoppingCart, UserCog } from 'lucide-react'
+import { LogOut, Settings, BookOpen, ShoppingCart, UserCog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
 import { getDisplayName } from '@/lib/utils'

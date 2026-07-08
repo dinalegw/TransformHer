@@ -1,13 +1,62 @@
 export type UserRole = 'user' | 'admin' | 'master_admin'
 export type AdminRank = 'junior' | 'senior' | 'lead' | 'master'
 
+export type Permission =
+  | 'view_books'
+  | 'create_books'
+  | 'edit_books'
+  | 'delete_books'
+  | 'archive_books'
+  | 'approve_changes'
+  | 'manage_users'
+  | 'manage_admins'
+  | 'view_orders'
+  | 'manage_orders'
+  | 'unlock_books'
+  | 'view_analytics'
+  | 'manage_settings'
+
 export interface RoleInfo {
   role: UserRole
   rank?: AdminRank
   title?: string
+  permissions: Permission[]
 }
 
-export const MASTER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'danieloinalegwu@gmail.com'
+export const ALL_PERMISSIONS: Permission[] = [
+  'view_books',
+  'create_books',
+  'edit_books',
+  'delete_books',
+  'archive_books',
+  'approve_changes',
+  'manage_users',
+  'manage_admins',
+  'view_orders',
+  'manage_orders',
+  'unlock_books',
+  'view_analytics',
+  'manage_settings',
+]
+
+export const DEFAULT_ADMIN_PERMISSIONS: Permission[] = [
+  'view_books',
+  'create_books',
+  'edit_books',
+  'view_orders',
+]
+
+export function getDefaultPermissions(role: UserRole): Permission[] {
+  if (role === 'master_admin') return [...ALL_PERMISSIONS]
+  if (role === 'admin') return [...DEFAULT_ADMIN_PERMISSIONS]
+  return []
+}
+
+export function hasPermission(permissions: Permission[] | undefined, permission: Permission): boolean {
+  return permissions?.includes(permission) ?? false
+}
+
+export const MASTER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@transformher.com'
 
 export function getRolePriority(role: UserRole): number {
   const map: Record<UserRole, number> = { user: 0, admin: 1, master_admin: 2 }

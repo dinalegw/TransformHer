@@ -7,12 +7,35 @@ import Link from 'next/link'
 import { Trash2, ShoppingBag, ArrowRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatPrice } from '@/lib/format'
-import type { SeedBook } from '@/lib/seed'
+
+interface BookInfo {
+  id: number
+  slug: string
+  title: string
+  author: string
+  category: string
+  price: string
+  currency: string
+  coverImage: string
+  fileUrl: string | null
+  tagline: string
+  description: string
+  rating: string
+  reviewsCount: number
+  pages: number
+  featured: boolean
+  bestseller: boolean
+  source: string
+  archived: boolean
+  deleted: boolean
+  createdAt: Date
+  updatedAt: Date
+}
 
 interface CartItemWithBook {
   id: number
   bookId: number
-  book: SeedBook
+  book: BookInfo
 }
 
 export function CartView({

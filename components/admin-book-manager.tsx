@@ -25,7 +25,7 @@ interface MergedBook {
   price: string
   currency: string
   coverImage: string
-  fileUrl?: string
+  fileUrl: string | null
   tagline: string
   description: string
   rating: string
@@ -33,7 +33,7 @@ interface MergedBook {
   pages: number
   featured: boolean
   bestseller: boolean
-  archived?: boolean
+  archived: boolean
   createdAt: Date | string
   source: 'seed' | 'admin'
 }
@@ -54,7 +54,7 @@ interface FormData {
   price: string
   currency: string
   coverImage: string
-  fileUrl?: string
+  fileUrl: string | null
   tagline: string
   description: string
   rating: string
@@ -72,6 +72,7 @@ const emptyForm: FormData = {
   price: '',
   currency: 'NGN',
   coverImage: '',
+  fileUrl: null,
   tagline: '',
   description: '',
   rating: '5.0',

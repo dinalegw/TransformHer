@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { verifyResetToken, updatePassword } from '@/lib/auth'
+import { verifyResetToken, updatePassword, getUserNameByEmail } from '@/lib/auth'
+import { sendPasswordChangedEmail } from '@/lib/email'
 
 export async function POST(req: Request) {
   try {
@@ -15,6 +16,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid or expired reset token' }, { status: 400 })
     }
     await updatePassword(email, password)
+    try {
+      const name = await getUserNameByEmail(email) ?? email.split('@')[0]
+      await sendPasswordChangedEmail(email, name)
+    } catch (err) {
+      console.error('Failed to send password changed email:', err)
+    }
     return NextResponse.json({ message: 'Password updated successfully' })
   } catch (err) {
     console.error('Reset password error:', err)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
-import { listAdminBooks, createAdminBook, getAllMergedBooks } from '@/lib/admin-books'
+import { listAdminBooks, createAdminBook, getAllMergedBooks, archiveBook } from '@/lib/admin-books'
 
 export async function GET() {
   try {
@@ -20,6 +20,12 @@ export async function POST(req: Request) {
   try {
     await requireAdmin()
     const body = await req.json()
+
+    // Handle archive toggle
+    if (body.slug && typeof body.archived === 'boolean') {
+      await archiveBook(body.slug, body.archived)
+      return NextResponse.json({ success: true })
+    }
 
     if (!body.title || !body.author || !body.category || !body.price || !body.coverImage) {
       return NextResponse.json(

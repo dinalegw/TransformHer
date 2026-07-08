@@ -44,7 +44,8 @@ export default async function BookDetailPage({
   if (!book) notFound()
 
   const user = await getCurrentUser()
-  const ownedItem = user ? await getLibraryItem(user.id, book.id) : null
+  const isMasterAdmin = user?.role === 'master_admin'
+  const ownedItem = user ? await getLibraryItem(user.id, book.id, isMasterAdmin) : null
   const isOwned = !!ownedItem
   const inCart = user ? !!(await getCartItem(user.id, book.id)) : false
   let alreadyOwned = false
@@ -171,7 +172,7 @@ export default async function BookDetailPage({
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-5 py-4">
                   <BookOpen className="size-5 text-green-700" />
                   <span className="font-heading text-lg text-green-800">
-                    In Your Library
+                    {isMasterAdmin ? 'Admin Access — Read Free' : 'In Your Library'}
                   </span>
                   <Button asChild size="sm" variant="outline" className="ml-auto rounded-full">
                     <Link href="/library">Go to Library</Link>
@@ -202,12 +203,16 @@ export default async function BookDetailPage({
               )}
 
               <ul className="mt-8 grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
-                {[
+                {(isMasterAdmin ? [
+                  'Full admin access to all books',
+                  'Read on any device',
+                  'No purchase required',
+                ] : [
                   'Unlocked within 72 hours of purchase',
                   'Read on any device',
                   'Lifetime ownership',
                   'Bookmarks & highlights',
-                ].map((perk) => (
+                ]).map((perk) => (
                   <li key={perk} className="flex items-center gap-2">
                     <Check className="size-4 text-primary" />
                     {perk}

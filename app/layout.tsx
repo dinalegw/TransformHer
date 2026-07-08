@@ -25,12 +25,12 @@ const INLINE_THEME_SCRIPT = `
 
 export const metadata: Metadata = {
   title: {
-    default: 'Bookstore — Transformational Books for Women',
-    template: '%s | Bookstore',
+    default: 'TransformHer — Transformational Books for Women',
+    template: '%s | TransformHer',
   },
   description:
-    'A luxury digital bookstore and reading platform with transformational books that help women grow in confidence, wealth, wellness, and purpose.',
-  generator: 'v0.app',
+    'A premium digital bookstore and reading platform with transformational books that help women grow in confidence, wealth, wellness, and purpose.',
+  applicationName: 'TransformHer',
   icons: {
     icon: [
       { url: '/icon.svg', type: 'image/svg+xml' },

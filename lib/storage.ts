@@ -1,5 +1,5 @@
 import 'server-only'
-import { writeFileSync, readFileSync, existsSync, mkdirSync, createReadStream, statSync } from 'fs'
+import { writeFileSync, existsSync, mkdirSync, createReadStream, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
 
@@ -14,7 +14,6 @@ function ensureDir(subdir: string): string {
 }
 
 export function saveBookFile(bookSlug: string, fileName: string, buffer: Buffer): string {
-  const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_')
   const ext = fileName.split('.').pop()?.toLowerCase() || 'pdf'
   const storedName = `${randomUUID()}.${ext}`
   const dir = ensureDir(bookSlug)
@@ -31,10 +30,10 @@ export function deleteBookFile(relativeUrl: string): void {
   const filePath = getBookFilePath(relativeUrl)
   try {
     if (existsSync(filePath)) {
-      readFileSync(filePath) // check it exists
+      unlinkSync(filePath)
     }
   } catch {
-    // file doesn't exist, silently ignore
+    // file couldn't be removed, ignore
   }
 }
 
