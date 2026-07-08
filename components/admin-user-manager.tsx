@@ -282,7 +282,7 @@ export function AdminUserManager({ showOnlyUsers, showOnlyAdmins }: Props) {
                   Permissions
                 </Button>
               )}
-              {!showOnlyUsers && user.role !== 'master_admin' && (
+              {user.role !== 'master_admin' && (
                 <Button
                   variant="ghost"
                   size="xs"

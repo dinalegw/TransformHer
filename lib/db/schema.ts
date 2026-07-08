@@ -117,3 +117,48 @@ export const cart = pgTable('cart', {
 })
 
 export type CartItem = typeof cart.$inferSelect
+
+/* ------------------------------------------------------------------ */
+/* Admin books & pending changes                                       */
+/* ------------------------------------------------------------------ */
+
+export const adminBooks = pgTable('admin_books', {
+  id: text('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  title: text('title').notNull(),
+  author: text('author').notNull(),
+  category: text('category').notNull(),
+  price: numeric('price', { precision: 10, scale: 2 }).notNull().default('0'),
+  currency: text('currency').notNull().default('NGN'),
+  coverImage: text('cover_image').notNull(),
+  fileUrl: text('file_url'),
+  tagline: text('tagline').notNull().default(''),
+  description: text('description').notNull().default(''),
+  rating: numeric('rating', { precision: 2, scale: 1 }).notNull().default('5.0'),
+  reviewsCount: integer('reviews_count').notNull().default(0),
+  pages: integer('pages').notNull().default(0),
+  featured: boolean('featured').notNull().default(false),
+  bestseller: boolean('bestseller').notNull().default(false),
+  archived: boolean('archived').notNull().default(false),
+  deleted: boolean('deleted').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export type AdminBookRow = typeof adminBooks.$inferSelect
+
+export const pendingChanges = pgTable('pending_changes', {
+  id: text('id').primaryKey(),
+  bookSlug: text('book_slug').notNull(),
+  bookTitle: text('book_title').notNull(),
+  type: text('type').notNull(),
+  changes: text('changes').notNull().default('{}'),
+  submittedBy: text('submitted_by').notNull(),
+  submittedByEmail: text('submitted_by_email').notNull(),
+  submittedAt: timestamp('submitted_at').notNull().defaultNow(),
+  status: text('status').notNull().default('pending'),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at'),
+})
+
+export type PendingChangeRow = typeof pendingChanges.$inferSelect

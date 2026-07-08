@@ -13,10 +13,9 @@ function createInMemoryDb() {
   const data = [...SEED_BOOKS]
 
   function query<T>(): DbQuery<T> {
-    let conditions: Array<(item: SeedBook) => boolean> = []
+    const conditions: Array<(item: SeedBook) => boolean> = []
     let sortFn: ((a: SeedBook, b: SeedBook) => number) | null = null
     let limitCount = Infinity
-    let groupByField: string | null = null
 
     const chain: DbQuery<T> = {
       select: () => chain,

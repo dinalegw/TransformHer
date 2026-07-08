@@ -7,8 +7,7 @@ import { hasPermission } from '@/lib/permissions'
 export async function GET() {
   try {
     const user = await requireAdmin()
-    const store = getUsersStore()
-    const allUsers = Array.from(store.users.values())
+    const allUsers = await listAllUsers()
     const allBooks = await getAllMergedBooks({ includeArchived: true })
     const bookBySlug = new Map(allBooks.map(b => [b.slug, b]))
 

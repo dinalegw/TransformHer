@@ -1,5 +1,5 @@
 import 'server-only'
-import { SEED_BOOKS, type SeedBook } from '@/lib/seed'
+import { type SeedBook } from '@/lib/seed'
 import { getAllMergedBooks } from '@/lib/admin-books'
 
 export type Book = SeedBook & { archived?: boolean }

@@ -18,7 +18,6 @@ coverage
 
 .DS_Store
 
-pnpm-lock.yaml
-
 data/
 .env*
+!.env.example

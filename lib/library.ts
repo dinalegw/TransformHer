@@ -95,7 +95,7 @@ export async function fetchLibrary(userId: string, includeArchived = false, isMa
     const rows = await db.select()
       .from(userPurchases)
       .where(eq(userPurchases.userId, userId))
-    let items = rows.map(r => ({
+    const items = rows.map(r => ({
       id: r.id,
       userId: r.userId,
       bookId: r.bookId,
@@ -104,8 +104,6 @@ export async function fetchLibrary(userId: string, includeArchived = false, isMa
       released: r.released ?? false,
       releaseAt: r.releaseAt ? r.releaseAt.toISOString() : null,
     }))
-    if (!includeArchived) {
-    }
     return items
   }
   const store = getLibraryStore()

@@ -1,6 +1,6 @@
 import 'server-only'
 import { cookies } from 'next/headers'
-import { randomUUID, pbkdf2Sync, randomBytes, createHmac } from 'crypto'
+import { randomUUID, pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from 'crypto'
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { eq } from 'drizzle-orm'
@@ -170,7 +170,9 @@ function verifyToken(token: string): Record<string, unknown> | null {
   if (parts.length !== 2) return null
   const [data, sig] = parts
   const expectedSig = createHmac('sha256', getSecret()).update(data).digest('base64url')
-  if (sig !== expectedSig) return null
+  const sigBuf = Buffer.from(sig)
+  const expectedBuf = Buffer.from(expectedSig)
+  if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) return null
   try {
     return JSON.parse(Buffer.from(data, 'base64url').toString('utf-8'))
   } catch {
@@ -301,6 +303,10 @@ export async function authenticateUser(
       email: userTable.email,
       passwordHash: userTable.passwordHash,
       isAdmin: userTable.isAdmin,
+      role: userTable.role,
+      rank: userTable.rank,
+      title: userTable.title,
+      permissions: userTable.permissions,
     })
       .from(userTable)
       .where(eq(userTable.email, normalizedEmail))
@@ -351,6 +357,10 @@ export async function createSession(userId: string): Promise<string> {
       name: userTable.name,
       email: userTable.email,
       isAdmin: userTable.isAdmin,
+      role: userTable.role,
+      rank: userTable.rank,
+      title: userTable.title,
+      permissions: userTable.permissions,
     })
       .from(userTable)
       .where(eq(userTable.id, userId))
@@ -413,6 +423,10 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       username: userTable.username,
       phone: userTable.phone,
       showFullName: userTable.showFullName,
+      role: userTable.role,
+      rank: userTable.rank,
+      title: userTable.title,
+      permissions: userTable.permissions,
     })
       .from(userTable)
       .where(eq(userTable.id, userId))

@@ -112,30 +112,33 @@ Master admins can assign specific permissions to sub-admins:
 
 ## ✦ Prerequisites
 
-- **Node.js** 18+ (uses [Next.js 16](https://nextjs.org))
+- **Node.js** 20.19+ (uses [Next.js 16](https://nextjs.org))
+- **pnpm** (package manager)
 
 ## ✦ Getting Started
 
 ```bash
 # install dependencies
-npm install
+pnpm install
 
-# create environment file
-# (see required variables below)
+# copy and fill in environment variables
+cp .env.example .env.local
+
 # then run the development server
-npm run dev
+pnpm dev
 ```
 
 ## ✦ Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start dev server |
-| `npm run build` | Production build |
-| `npm start` | Start production server |
-| `npm run lint` | Run ESLint |
-| `npm run test` | Run tests |
-| `npm run db:migrate` | Run DB migrations |
+| `pnpm dev` | Start dev server |
+| `pnpm build` | Production build |
+| `pnpm start` | Start production server |
+| `pnpm typecheck` | Type-check with `tsc --noEmit` |
+| `pnpm lint` | Run ESLint |
+| `pnpm test` | Run tests (Vitest) |
+| `pnpm db:migrate` | Run DB migrations |
 | `node scripts/setup-templates.mjs` | Create/update Courier email templates |
 
 ## ✦ Environment Variables

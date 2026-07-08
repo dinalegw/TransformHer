@@ -56,7 +56,7 @@ export function hasPermission(permissions: Permission[] | undefined, permission:
   return permissions?.includes(permission) ?? false
 }
 
-export const MASTER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'danieloinalegwu@gmail.com'
+export const MASTER_ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@transformher.com'
 
 export function getRolePriority(role: UserRole): number {
   const map: Record<UserRole, number> = { user: 0, admin: 1, master_admin: 2 }
