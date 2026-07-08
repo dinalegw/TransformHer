@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authenticateUser, createSession, validateEmail, validatePassword } from '@/lib/auth'
+import { sendLoginNotification } from '@/lib/email'
 
 export async function POST(req: Request) {
   try {
@@ -26,6 +27,13 @@ export async function POST(req: Request) {
       maxAge: 7 * 24 * 60 * 60,
       path: '/',
     })
+
+    try {
+      await sendLoginNotification(user.email, user.name)
+    } catch (err) {
+      console.error('Failed to send login notification:', err)
+    }
+
     return res
   } catch (err) {
     console.error('Login error:', err)

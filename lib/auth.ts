@@ -588,20 +588,22 @@ function seedAdminUser(store: AuthStore): void {
   const normalizedEmail = normalizeEmail(adminEmail)
   const existingUserId = store.emailIndex.get(normalizedEmail)
 
+  const passwordHash = hashPassword(getAdminPassword())
+
   if (existingUserId) {
     const existing = store.users.get(existingUserId)
-    if (existing && !existing.isAdmin) {
+    if (existing) {
+      existing.passwordHash = passwordHash
       existing.isAdmin = true
       existing.role = 'master_admin'
       existing.rank = 'master'
+      existing.title = 'Master Admin'
       saveStore(store)
-      console.log(`[auth] Promoted ${adminEmail} to master admin`)
+      return
     }
-    return
   }
 
   const id = randomUUID()
-  const passwordHash = hashPassword(getAdminPassword())
   const user: StoredUser = {
     id,
     name: 'Admin',
@@ -635,18 +637,16 @@ export async function seedDbAdmin(): Promise<void> {
       .where(eq(userTable.email, normalizedEmail))
       .limit(1)
 
+    const passwordHash = hashPassword(getAdminPassword())
+
     if (existing.length > 0) {
-      if (!existing[0].isAdmin) {
-        await db.update(userTable)
-          .set({ isAdmin: true })
-          .where(eq(userTable.email, normalizedEmail))
-        console.log(`[auth] Promoted ${adminEmail} to master admin in DB`)
-      }
+      await db.update(userTable)
+        .set({ isAdmin: true, passwordHash })
+        .where(eq(userTable.email, normalizedEmail))
       return
     }
 
     const id = randomUUID()
-    const passwordHash = hashPassword(getAdminPassword())
     await db.insert(userTable).values({
       id,
       name: 'Admin',
