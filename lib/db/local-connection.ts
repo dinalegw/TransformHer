@@ -1,7 +1,8 @@
 import { drizzle } from 'drizzle-orm/better-sqlite3'
 import Database from 'better-sqlite3'
 import { join } from 'path'
-import { existsSync, mkdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync } from 'fs'
+import { randomUUID, pbkdf2Sync, randomBytes } from 'crypto'
 import * as schema from './schema-local'
 
 const DB_DIR = join(process.cwd(), 'data')
@@ -206,12 +207,11 @@ function seedLocalAdmin() {
   const existing = _sqlite.prepare('SELECT id FROM user WHERE email = ?').get(adminEmail)
   if (existing) return
 
-  const crypto = require('crypto')
-  const id = crypto.randomUUID()
+  const id = randomUUID()
   const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@123'
 
-  const salt = crypto.randomBytes(16)
-  const key = crypto.pbkdf2Sync(adminPassword, salt, 100000, 32, 'sha256')
+  const salt = randomBytes(16)
+  const key = pbkdf2Sync(adminPassword, salt, 100000, 32, 'sha256')
   const passwordHash = `${salt.toString('hex')}:${key.toString('hex')}`
 
   const now = Date.now()
