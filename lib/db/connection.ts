@@ -1,7 +1,6 @@
 import { drizzle } from 'drizzle-orm/neon-serverless'
 import { Pool, type PoolConfig } from '@neondatabase/serverless'
 import * as schema from './schema'
-import { getLocalDb, closeLocalDb } from './local-connection'
 
 const MAX_RETRIES = 2
 const RETRY_DELAY_MS = 500
@@ -56,12 +55,28 @@ function isPoolReady(pool: Pool): Promise<boolean> {
   })
 }
 
-export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
-  // If we already have a working connection, return it
-  if (_pg) return _pg
-  if (_usingFallback) return getLocalDb() as any
+async function getLocalFallback() {
+  try {
+    const { getLocalDb } = await import('./local-connection')
+    return getLocalDb()
+  } catch {
+    return null
+  }
+}
 
-  // Try PostgreSQL first
+async function closeLocalFallback() {
+  try {
+    const { closeLocalDb } = await import('./local-connection')
+    closeLocalDb()
+  } catch {
+    // ignore
+  }
+}
+
+export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
+  if (_pg) return _pg
+  if (_usingFallback) return getLocalFallback() as any
+
   const url = getConnectionUrl()
   if (url) {
     let lastError: Error | null = null
@@ -106,16 +121,15 @@ export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>>
     console.error('[db] PostgreSQL unavailable:', lastError?.message)
   }
 
-  // Fall back to SQLite
   if (!_fallbackAttempted) {
     _fallbackAttempted = true
     console.log('[db] Falling back to SQLite (local database)')
   }
 
-  const localDb = getLocalDb()
+  const localDb = await getLocalFallback()
   if (localDb) {
     _usingFallback = true
-    _pgSeeded = true // prevent seeding attempts on pg-core schema
+    _pgSeeded = true
     return localDb as any
   }
 
@@ -136,7 +150,7 @@ export async function closeDb() {
     _pgPool = null
     _pg = null
   }
-  closeLocalDb()
+  await closeLocalFallback()
   _usingFallback = false
   _fallbackAttempted = false
 }
