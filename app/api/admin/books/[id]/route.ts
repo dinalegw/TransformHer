@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
 import { requireAdmin } from '@/lib/auth'
-import { getAdminBook, updateAdminBook, deleteAdminBook, deleteBookBySlug } from '@/lib/admin-books'
+import { hasPermission } from '@/lib/permissions'
+import { getDb } from '@/lib/db/connection'
+import { books } from '@/lib/db/schema'
+import {
+  getAdminBook, updateAdminBook, deleteAdminBook, deleteBookBySlug,
+  submitPendingChange,
+} from '@/lib/admin-books'
+import type { Book } from '@/lib/admin-books'
 
 export async function GET(
   _req: Request,
@@ -32,13 +40,30 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    const user = await requireAdmin()
     const { id } = await params
     const bookId = Number(id)
     if (isNaN(bookId)) {
       return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
     }
     const body = await req.json()
+    const isMaster = user.role === 'master_admin'
+
+    if (!isMaster) {
+      if (!hasPermission(user.permissions, 'edit_books')) {
+        return NextResponse.json({ error: 'Forbidden: you lack the edit_books permission' }, { status: 403 })
+      }
+      const existing = await getAdminBook(bookId)
+      if (!existing) {
+        return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+      }
+      const change = await submitPendingChange(
+        'update', existing.slug, existing.title,
+        body as Partial<Book>, user.id, user.email,
+      )
+      return NextResponse.json({ change, pending: true }, { status: 202 })
+    }
+
     const book = await updateAdminBook(bookId, body)
     return NextResponse.json({ book })
   } catch (err) {
@@ -55,8 +80,42 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAdmin()
+    const user = await requireAdmin()
     const { id } = await params
+    const isMaster = user.role === 'master_admin'
+
+    if (!isMaster) {
+      if (!hasPermission(user.permissions, 'delete_books')) {
+        return NextResponse.json({ error: 'Forbidden: you lack the delete_books permission' }, { status: 403 })
+      }
+
+      const { searchParams } = new URL(req.url)
+      const slugParam = searchParams.get('slug')
+      const bookId = Number(id)
+
+      let book: Book | undefined
+      if (slugParam) {
+        const db = await getDb()
+        if (db) {
+          const rows = await db.select().from(books).where(eq(books.slug, slugParam)).limit(1)
+          book = rows[0] as Book | undefined
+        }
+      } else if (!isNaN(bookId)) {
+        book = await getAdminBook(bookId)
+      }
+
+      if (!book) {
+        return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+      }
+
+      const change = await submitPendingChange(
+        'delete', book.slug, book.title,
+        {}, user.id, user.email,
+      )
+      return NextResponse.json({ change, pending: true }, { status: 202 })
+    }
+
+    // Master: direct delete
     const { searchParams } = new URL(req.url)
     const source = searchParams.get('source')
 
@@ -69,7 +128,6 @@ export async function DELETE(
     } else {
       const bookId = Number(id)
       if (isNaN(bookId)) {
-        // Try slug-based deletion
         const slug = searchParams.get('slug')
         if (slug) {
           await deleteBookBySlug(slug)

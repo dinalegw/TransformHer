@@ -270,19 +270,44 @@ export async function approveChange(changeId: string, reviewedBy: string): Promi
     await deleteBookBySlug(change.bookSlug)
   } else if (change.type === 'archive') {
     await archiveBook(change.bookSlug, parsedChanges.archived ?? true)
+  } else if (change.type === 'create') {
+    const slug = sanitizeSlug(parsedChanges.slug || generateSlug(parsedChanges.title || ''))
+    if (!slug) throw new Error('Could not generate a valid slug')
+
+    const slugExists = await db.select({ id: books.id })
+      .from(books)
+      .where(eq(books.slug, slug))
+      .limit(1)
+    if (slugExists.length > 0) throw new Error('A book with this slug already exists')
+
+    await db.insert(books).values({
+      slug,
+      title: parsedChanges.title ?? 'Untitled',
+      author: parsedChanges.author ?? 'Unknown',
+      category: (parsedChanges.category ?? 'Mindset & Confidence') as Book['category'],
+      price: parsedChanges.price ?? '0',
+      currency: (parsedChanges.currency ?? 'NGN') as Book['currency'],
+      coverImage: parsedChanges.coverImage ?? '',
+      fileUrl: parsedChanges.fileUrl ?? null,
+      tagline: parsedChanges.tagline ?? '',
+      description: parsedChanges.description ?? '',
+      rating: parsedChanges.rating ?? '5.0',
+      reviewsCount: parsedChanges.reviewsCount ?? 0,
+      pages: parsedChanges.pages ?? 0,
+      featured: parsedChanges.featured ?? false,
+      bestseller: parsedChanges.bestseller ?? false,
+      source: 'admin',
+      archived: false,
+      deleted: false,
+      createdAt: now,
+      updatedAt: now,
+    })
   } else {
     const rows = await db.select().from(books).where(eq(books.slug, change.bookSlug)).limit(1)
     if (rows.length > 0) {
       await db.update(books)
         .set({ ...parsedChanges, updatedAt: now })
         .where(eq(books.slug, change.bookSlug))
-    } else if (change.type === 'create') {
-      await db.insert(books).values({
-        ...(parsedChanges as NewBook),
-        source: 'admin',
-        createdAt: now,
-        updatedAt: now,
-      })
     }
   }
 

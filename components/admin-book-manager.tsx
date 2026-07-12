@@ -93,9 +93,6 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
   const [uploading, setUploading] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
 
-  const isMaster = userRole === 'master_admin'
-  const needsPending = userRole === 'admin'
-
   const openCreate = useCallback(() => {
     setForm(emptyForm)
     setUploadedFile(null)
@@ -196,24 +193,13 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
     const payload = { ...form }
 
     try {
-      // If sub-admin and not master, submit as pending change
-      if (needsPending && method === 'POST' && modal?.mode === 'create') {
-        const res = await fetch('/api/admin/books', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Something went wrong')
-      } else {
-        const res = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Something went wrong')
-      }
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Something went wrong')
 
       closeModal()
       router.refresh()
@@ -222,13 +208,9 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
     } finally {
       setSaving(false)
     }
-  }, [modal, form, closeModal, router, needsPending])
+  }, [modal, form, closeModal, router])
 
   const handleDelete = useCallback(async (book: MergedBook) => {
-    if (!isMaster) {
-      setError('Only master admin can delete books')
-      return
-    }
     if (!confirm(`Delete "${book.title}"? This removes it from the store but NOT from owners' libraries.`)) return
 
     setDeleting(String(book.id))
@@ -250,7 +232,7 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
     } finally {
       setDeleting(null)
     }
-  }, [router, isMaster])
+  }, [router])
 
   const handleArchive = useCallback(async (book: MergedBook, archived: boolean) => {
     setError('')
@@ -299,7 +281,7 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
       <div className="mb-6 flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
           Showing {books.length} book{books.length !== 1 ? 's' : ''}
-          {!isMaster && <span className="ml-2 text-xs text-amber-600">(sub-admin — some actions restricted)</span>}
+          {userRole !== 'master_admin' && <span className="ml-2 text-xs text-amber-600">(sub-admin — submitted for approval)</span>}
         </p>
         <Button onClick={openCreate} size="sm">
           <Plus className="size-4" />
@@ -367,32 +349,28 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
                     >
                       <Edit className="size-3.5" />
                     </Button>
-                    {isMaster && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => handleArchive(book, !book.archived)}
-                          aria-label={book.archived ? 'Unarchive' : 'Archive'}
-                        >
-                          {book.archived ? (
-                            <ArchiveRestore className="size-3.5 text-amber-600" />
-                          ) : (
-                            <Archive className="size-3.5 text-muted-foreground" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => handleDelete(book)}
-                          disabled={deleting === String(book.id)}
-                          aria-label={`Delete ${book.title}`}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleArchive(book, !book.archived)}
+                      aria-label={book.archived ? 'Unarchive' : 'Archive'}
+                    >
+                      {book.archived ? (
+                        <ArchiveRestore className="size-3.5 text-amber-600" />
+                      ) : (
+                        <Archive className="size-3.5 text-muted-foreground" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleDelete(book)}
+                      disabled={deleting === String(book.id)}
+                      aria-label={`Delete ${book.title}`}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
                   </div>
                 </td>
               </tr>
@@ -629,13 +607,7 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
                   Cancel
                 </Button>
                 <Button type="submit" size="sm" disabled={saving}>
-                  {saving
-                    ? 'Saving...'
-                    : needsPending && modal?.mode === 'create'
-                      ? 'Submit for Approval'
-                      : modal?.mode === 'create'
-                        ? 'Create Book'
-                        : 'Save Changes'}
+                  {saving ? 'Saving...' : modal?.mode === 'create' ? 'Create Book' : 'Save Changes'}
                 </Button>
               </div>
             </form>
