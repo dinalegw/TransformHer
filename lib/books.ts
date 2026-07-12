@@ -157,7 +157,7 @@ export async function getCategoryCounts(): Promise<Record<string, number>> {
 
   const rows = await db.select({
     category: books.category,
-    count: sql<number>`count(*)::int`,
+    count: sql<number>`count(*)`,
   })
     .from(books)
     .where(and(eq(books.deleted, false), eq(books.archived, false)))

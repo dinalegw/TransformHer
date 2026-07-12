@@ -1,13 +1,16 @@
 import { drizzle } from 'drizzle-orm/neon-serverless'
 import { Pool, type PoolConfig } from '@neondatabase/serverless'
 import * as schema from './schema'
+import { getLocalDb, closeLocalDb } from './local-connection'
 
-const MAX_RETRIES = 3
+const MAX_RETRIES = 2
 const RETRY_DELAY_MS = 500
 
-let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
-let _pool: Pool | null = null
-let _dbSeeded = false
+let _pg: ReturnType<typeof drizzle<typeof schema>> | null = null
+let _pgPool: Pool | null = null
+let _pgSeeded = false
+let _fallbackAttempted = false
+let _usingFallback = false
 
 function getConnectionUrl(): string | null {
   return process.env.POSTGRES_URL_NON_POOLING
@@ -53,64 +56,87 @@ function isPoolReady(pool: Pool): Promise<boolean> {
   })
 }
 
-export async function getDb() {
-  if (_db) return _db
+export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
+  // If we already have a working connection, return it
+  if (_pg) return _pg
+  if (_usingFallback) return getLocalDb() as any
 
+  // Try PostgreSQL first
   const url = getConnectionUrl()
-  if (!url) return null
+  if (url) {
+    let lastError: Error | null = null
 
-  let lastError: Error | null = null
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const config = getPoolConfig()
+        _pgPool = new Pool(config)
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const config = getPoolConfig()
-      _pool = new Pool(config)
+        const ready = await isPoolReady(_pgPool)
+        if (!ready) {
+          await _pgPool.end().catch(() => {})
+          _pgPool = null
+          throw new Error('Database connection timeout')
+        }
 
-      const ready = await isPoolReady(_pool)
-      if (!ready) {
-        await _pool.end().catch(() => {})
-        _pool = null
-        throw new Error('Database connection timeout')
-      }
+        _pg = drizzle(_pgPool, { schema })
 
-      _db = drizzle(_pool, { schema })
+        if (!_pgSeeded) {
+          _pgSeeded = true
+          const { seedDbAdmin } = await import('@/lib/auth')
+          seedDbAdmin().catch(() => {})
+          const { seedInitialBooks } = await import('@/lib/db/seed')
+          seedInitialBooks().catch(() => {})
+        }
 
-      if (!_dbSeeded) {
-        _dbSeeded = true
-        const { seedDbAdmin } = await import('@/lib/auth')
-        seedDbAdmin().catch(() => {})
-        const { seedInitialBooks } = await import('@/lib/db/seed')
-        seedInitialBooks().catch(() => {})
-      }
+        return _pg
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        console.error(`[db] PostgreSQL attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message)
 
-      return _db
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err))
-      console.error(`[db] Connection attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message)
+        if (_pgPool) {
+          await _pgPool.end().catch(() => {})
+          _pgPool = null
+        }
 
-      if (_pool) {
-        await _pool.end().catch(() => {})
-        _pool = null
-      }
-
-      if (attempt < MAX_RETRIES) {
-        await wait(RETRY_DELAY_MS * attempt)
+        if (attempt < MAX_RETRIES) {
+          await wait(RETRY_DELAY_MS * attempt)
+        }
       }
     }
+    console.error('[db] PostgreSQL unavailable:', lastError?.message)
   }
 
-  console.error('[db] All connection attempts failed')
+  // Fall back to SQLite
+  if (!_fallbackAttempted) {
+    _fallbackAttempted = true
+    console.log('[db] Falling back to SQLite (local database)')
+  }
+
+  const localDb = getLocalDb()
+  if (localDb) {
+    _usingFallback = true
+    _pgSeeded = true // prevent seeding attempts on pg-core schema
+    return localDb as any
+  }
+
   return null
 }
 
+export function isUsingLocalDb(): boolean {
+  return _usingFallback
+}
+
 export async function closeDb() {
-  if (_pool) {
+  if (_pgPool) {
     try {
-      await _pool.end()
+      await _pgPool.end()
     } catch {
       // ignore close errors
     }
-    _pool = null
-    _db = null
+    _pgPool = null
+    _pg = null
   }
+  closeLocalDb()
+  _usingFallback = false
+  _fallbackAttempted = false
 }

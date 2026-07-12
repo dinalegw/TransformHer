@@ -23,6 +23,7 @@
     "@trycourier/courier": "^7.11.0",
     "@vercel/analytics": "1.6.1",
     "better-auth": "^1.6.23",
+    "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@tailwindcss/postcss": "^4.2.0",
+    "@types/better-sqlite3": "7.6.13",
     "@types/node": "^24",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
