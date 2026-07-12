@@ -4,6 +4,8 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { User, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 
@@ -96,49 +98,49 @@ export default function ProfilePage() {
             )}
 
             <div>
-              <label htmlFor="name" className="text-sm font-medium text-foreground">Full name</label>
-              <input
+              <Label htmlFor="name">Full name</Label>
+              <Input
                 id="name"
                 type="text"
                 required
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="mt-1"
               />
             </div>
 
             <div>
-              <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
-              <input
+              <Label htmlFor="email">Email</Label>
+              <Input
                 id="email"
                 type="email"
                 disabled
                 value={email}
-                className="mt-1 h-9 w-full rounded-lg border border-input bg-muted px-3 text-sm text-muted-foreground outline-none"
+                className="mt-1"
               />
               <p className="mt-1 text-xs text-muted-foreground">Email cannot be changed</p>
             </div>
 
             <div>
-              <label htmlFor="username" className="text-sm font-medium text-foreground">Username</label>
-              <input
+              <Label htmlFor="username">Username</Label>
+              <Input
                 id="username"
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="mt-1"
                 placeholder="Optional"
               />
             </div>
 
             <div>
-              <label htmlFor="phone" className="text-sm font-medium text-foreground">Phone</label>
-              <input
+              <Label htmlFor="phone">Phone</Label>
+              <Input
                 id="phone"
                 type="tel"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="mt-1"
                 placeholder="Optional"
               />
             </div>
@@ -151,9 +153,9 @@ export default function ProfilePage() {
                 onChange={e => setShowFullName(e.target.checked)}
                 className="size-4 rounded border-input accent-primary"
               />
-              <label htmlFor="showFullName" className="text-sm text-muted-foreground">
+              <Label htmlFor="showFullName" className="font-normal">
                 Show my full name instead of username
-              </label>
+              </Label>
             </div>
 
             <Button type="submit" disabled={loading} className="rounded-full">

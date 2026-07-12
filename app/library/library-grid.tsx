@@ -105,7 +105,7 @@ export function LibraryGrid({ items }: { items: LibraryItemWithBook[] }) {
                 src={book.coverImage || '/placeholder.svg'}
                 alt={`Cover of ${book.title}`}
                 fill
-                sizes="(max-width: 768px) 45vw, 22vw"
+                sizes="(max-width: 768px) 50vw, 25vw"
                 className="object-cover"
               />
               {book.bestseller && released && (

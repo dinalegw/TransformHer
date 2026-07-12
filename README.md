@@ -215,6 +215,49 @@ The admin user is auto-seeded on first startup. Password changes via env vars ar
 | `/api/paystack/initialize` | POST | Auth | Initialize Paystack payment |
 | `/api/paystack/verify` | POST | Auth | Verify Paystack payment |
 
+## ✦ Notes & Improvements
+
+This codebase is built for production and has been hardened for responsiveness,
+rendering correctness, and edge-case safety.
+
+### Responsiveness
+
+- **Storefront** is fully fluid: the header collapses its nav to a compact menu
+  below `lg`, the hero spotlight card renders on all screen sizes, product and
+  library grids reflow from 4 → 2 → 1 columns, and catalog controls stack on
+  small screens.
+- **Admin portal** ships a slide-in drawer sidebar (with overlay + Escape/backdrop
+  close) on mobile, horizontally scrollable data tables, and a modal that closes
+  on backdrop click or `Esc`.
+- **Theme system** supports light, dark, and a warm `night-shift` reading mode,
+  with an inline script that sets the class before paint to avoid a flash.
+
+### Edge cases handled
+
+- **Payments** — checkout confirms the amount Paystack actually collected against
+  the cart total, skips books removed between checkout start and confirmation
+  (no orphaned purchases with empty slugs), and re-sends a verification/expiry
+  guard on refresh.
+- **Books** — archived books are filtered at the query level; slugs are sanitized
+  on create/edit (closing path-traversal in file storage); the public book cache
+  is invalidated when admins edit books so prices/titles update immediately.
+- **Library** — a 72-hour unlock timer releases purchases and emails the reader;
+  `addToCart` rejects deleted/archived/out-of-stock books.
+- **Auth** — password reset no longer reveals whether an email is registered;
+  the logout cookie mirrors the production `secure`/`sameSite` attributes; last
+  master admin and self-demotion are blocked; uploaded book files are validated
+  by extension **and** magic bytes (≤ 50 MB).
+- **Reading** — book files stream via `Readable.toWeb` for correct behavior on
+  serverless runtimes, with inline `Content-Disposition`.
+
+### Data layer
+
+- Uses **Drizzle ORM** over PostgreSQL (Neon) in production. In development, if
+  PostgreSQL is unavailable the app transparently falls back to a local SQLite
+  store so the UI remains fully functional.
+- Public and admin queries are cached in-memory (TTL ~30–60s) and invalidated on
+  mutation.
+
 ## ✦ License
 
 This project is [MIT](LICENSE) licensed.

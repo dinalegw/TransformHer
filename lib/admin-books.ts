@@ -24,11 +24,26 @@ export interface PendingChange {
 
 const CACHE_PREFIX = 'admin_books'
 
+// Public book queries in lib/books.ts are cached under the 'books' prefix.
+// Invalidate both so storefront listings reflect admin edits immediately.
+function invalidateBookCaches() {
+  invalidateCache(CACHE_PREFIX)
+  invalidateCache('books')
+}
+
 function generateSlug(title: string): string {
   return title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function sanitizeSlug(slug: string): string {
+  return slug
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
 }
 
 /* ------------------------------------------------------------------ */
@@ -76,7 +91,7 @@ export async function createAdminBook(
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
-  const slug = book.slug || generateSlug(book.title)
+  const slug = sanitizeSlug(book.slug || generateSlug(book.title))
 
   const existing = await db.select({ id: books.id })
     .from(books)
@@ -111,7 +126,7 @@ export async function createAdminBook(
     updatedAt: now,
   }).returning()
 
-  invalidateCache(CACHE_PREFIX)
+  invalidateBookCaches()
   return inserted
 }
 
@@ -125,6 +140,8 @@ export async function updateAdminBook(
   const existing = await db.select().from(books).where(eq(books.id, id)).limit(1)
   if (existing.length === 0) throw new Error('Book not found')
   if (existing[0].deleted) throw new Error('Cannot update a deleted book')
+
+  if (updates.slug) updates.slug = sanitizeSlug(updates.slug)
 
   if (updates.slug && updates.slug !== existing[0].slug) {
     const slugExists = await db.select({ id: books.id })
@@ -141,7 +158,7 @@ export async function updateAdminBook(
     .where(eq(books.id, id))
     .returning()
 
-  invalidateCache(CACHE_PREFIX)
+  invalidateBookCaches()
   return updated
 }
 
@@ -157,7 +174,7 @@ export async function deleteAdminBook(id: number): Promise<void> {
   }
 
   await db.delete(books).where(eq(books.id, id))
-  invalidateCache(CACHE_PREFIX)
+  invalidateBookCaches()
 }
 
 export async function deleteBookBySlug(slug: string): Promise<void> {
@@ -174,7 +191,7 @@ export async function deleteBookBySlug(slug: string): Promise<void> {
     throw new Error('Book not found')
   }
 
-  invalidateCache(CACHE_PREFIX)
+  invalidateBookCaches()
 }
 
 /* ------------------------------------------------------------------ */
@@ -192,7 +209,7 @@ export async function archiveBook(slug: string, archived: boolean): Promise<void
     .set({ archived, updatedAt: new Date() })
     .where(eq(books.slug, slug))
 
-  invalidateCache(CACHE_PREFIX)
+  invalidateBookCaches()
 }
 
 /* ------------------------------------------------------------------ */
@@ -274,7 +291,7 @@ export async function approveChange(changeId: string, reviewedBy: string): Promi
     .where(eq(pendingChanges.id, changeId))
     .returning()
 
-  invalidateCache(CACHE_PREFIX)
+  invalidateBookCaches()
 
   return {
     id: updated.id,

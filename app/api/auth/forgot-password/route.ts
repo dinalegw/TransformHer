@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { generateResetToken } from '@/lib/auth'
+import { generateResetToken, emailExists } from '@/lib/auth'
 import { sendPasswordResetEmail } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 
@@ -10,18 +10,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    const token = generateResetToken(email)
+    const normalizedEmail = String(email).trim().toLowerCase()
+    // Always return the same response to avoid leaking which emails are registered.
+    const message = {
+      message: 'If that email is registered, a reset link has been sent.',
+    }
+
+    const exists = await emailExists(normalizedEmail)
+    if (!exists) {
+      return NextResponse.json(message)
+    }
+
+    const token = generateResetToken(normalizedEmail)
     const resetLink = `${getBaseUrl()}/reset-password?token=${token}`
 
     try {
-      await sendPasswordResetEmail(email, resetLink)
+      await sendPasswordResetEmail(normalizedEmail, resetLink)
     } catch (emailErr) {
       console.error('Forgot password email failed to send:', emailErr)
     }
 
-    return NextResponse.json({
-      message: 'If that email is registered, a reset link has been sent.',
-    })
+    return NextResponse.json(message)
   } catch (err) {
     console.error('Forgot password error:', err)
     const message = err instanceof Error ? err.message : 'Something went wrong'

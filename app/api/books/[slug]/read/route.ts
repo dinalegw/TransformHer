@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { Readable } from 'node:stream'
 import { getCurrentUser } from '@/lib/auth'
 import { ownsBookBySlug } from '@/lib/library'
 import { findAdminBookBySlug } from '@/lib/admin-books'
@@ -50,7 +51,7 @@ export async function GET(
     const size = getFileSize(fileUrl)
     if (size) headers.set('Content-Length', String(size))
 
-    return new Response(stream as unknown as ReadableStream, {
+    return new Response(Readable.toWeb(stream) as ReadableStream, {
       headers,
       status: 200,
     })

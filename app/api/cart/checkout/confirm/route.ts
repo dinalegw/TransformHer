@@ -38,11 +38,27 @@ export async function POST(req: Request) {
 
     const bookMap = new Map(allBooks.map(b => [b.id, b]))
 
+    // Verify the amount Paystack actually collected matches the cart total.
+    const verifiedKobo = Number(result.data.amount)
+    const expectedKobo = items.reduce((sum, item) => {
+      const book = bookMap.get(item.bookId)
+      return book ? sum + Math.round(Number(book.price) * 100) : sum
+    }, 0)
+    if (Math.abs(verifiedKobo - expectedKobo) > 0) {
+      return NextResponse.json({ error: 'Payment amount mismatch' }, { status: 402 })
+    }
+
     const errors: string[] = []
     for (const item of items) {
       try {
         const book = bookMap.get(item.bookId)
-        await recordPurchase(user.id, item.bookId, book?.slug ?? '', ref)
+        if (!book) {
+          // Book was deleted/archived between checkout start and confirm.
+          errors.push(`Book ${item.bookId}: no longer available`)
+          await removeFromCart(user.id, item.bookId)
+          continue
+        }
+        await recordPurchase(user.id, item.bookId, book.slug, ref)
         await removeFromCart(user.id, item.bookId)
       } catch (e) {
         errors.push(`Book ${item.bookId}: ${(e as Error).message}`)

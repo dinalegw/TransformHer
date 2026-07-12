@@ -11,6 +11,55 @@ const DB_PATH = join(DB_DIR, 'transformher.db')
 let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
 let _sqlite: Database.Database | null = null
 
+function normalizeParam(p: unknown): unknown {
+  if (typeof p === 'boolean') return p ? 1 : 0
+  if (p instanceof Date) return p.getTime()
+  if (p && typeof p === 'object' && 'toISOString' in (p as Date)) {
+    const n = (p as Date).getTime()
+    if (!isNaN(n)) return n
+  }
+  return p
+}
+
+function normalizeParams(params: unknown[]): unknown[] {
+  return params.map(normalizeParam)
+}
+
+function wrapStmt(stmt: Database.Statement): Database.Statement {
+  const origRaw = stmt.raw.bind(stmt)
+  const origAll = stmt.all.bind(stmt)
+  const origGet = stmt.get.bind(stmt)
+  const origRun = stmt.run.bind(stmt)
+
+  stmt.raw = function () {
+    origRaw()
+    return stmt
+  } as typeof stmt.raw
+
+  stmt.all = function (...params: unknown[]) {
+    return origAll(...normalizeParams(params))
+  } as typeof stmt.all
+
+  stmt.get = function (...params: unknown[]) {
+    return origGet(...normalizeParams(params))
+  } as typeof stmt.get
+
+  stmt.run = function (...params: unknown[]) {
+    return origRun(...normalizeParams(params))
+  } as typeof stmt.run
+
+  return stmt
+}
+
+function wrapDb(db: Database.Database): Database.Database {
+  const origPrepare = db.prepare.bind(db)
+  db.prepare = function (sql: string) {
+    const stmt = origPrepare(sql)
+    return wrapStmt(stmt)
+  } as typeof db.prepare
+  return db
+}
+
 export function getLocalDb() {
   if (_db) return _db
 
@@ -19,7 +68,7 @@ export function getLocalDb() {
       mkdirSync(DB_DIR, { recursive: true })
     }
 
-    _sqlite = new Database(DB_PATH)
+    _sqlite = wrapDb(new Database(DB_PATH))
 
     _sqlite.pragma('journal_mode = WAL')
     _sqlite.pragma('foreign_keys = ON')

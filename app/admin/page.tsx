@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { getCurrentUser, listAllUsers } from '@/lib/auth'
 import { getAllMergedBooks, countPendingChanges } from '@/lib/admin-books'
 import { AdminDashboardClient } from './dashboard-client'
@@ -61,13 +62,15 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
 
-        <AdminDashboardClient
-          books={books}
-          userRole={user?.role ?? ''}
-          userEmail={user?.email ?? ''}
-          userName={user?.name ?? ''}
-          isMaster={isMaster}
-        />
+        <Suspense>
+          <AdminDashboardClient
+            books={books}
+            userRole={user?.role ?? ''}
+            userEmail={user?.email ?? ''}
+            userName={user?.name ?? ''}
+            isMaster={isMaster}
+          />
+        </Suspense>
       </div>
     </main>
   )

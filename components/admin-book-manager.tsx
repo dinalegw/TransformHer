@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, type FormEvent } from 'react'
+import { useState, useEffect, useCallback, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Edit, Trash2, X, Upload, Archive, ArchiveRestore, Loader2 } from 'lucide-react'
 import { formatPrice } from '@/lib/format'
@@ -131,6 +131,15 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
     setUploadedFile(null)
     setError('')
   }, [])
+
+  useEffect(() => {
+    if (!modal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeModal()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [modal, closeModal])
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -298,8 +307,8 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-border">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="bg-muted text-muted-foreground">
             <tr>
               <th className="px-4 py-3 font-medium">Title</th>
@@ -393,8 +402,14 @@ export function AdminBookManager({ books, userRole, userEmail, userName }: Admin
       </div>
 
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-background p-6 shadow-xl ring-1 ring-border">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closeModal}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-background p-6 shadow-xl ring-1 ring-border"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-heading text-lg text-foreground">
                 {modal.mode === 'create' ? 'Add Book' : 'Edit Book'}

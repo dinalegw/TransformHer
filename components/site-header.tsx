@@ -62,10 +62,10 @@ export function SiteHeader() {
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-6">
         <Link href="/" className="font-heading text-xl tracking-tight text-foreground md:text-2xl">
-          Bookstore
+          TransformHer
         </Link>
 
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="hidden items-center gap-6 lg:flex">
           {NAV.map((item) => {
             const isCart = item.label === 'Cart'
             return (
@@ -73,7 +73,7 @@ export function SiteHeader() {
                 key={item.label}
                 href={item.href}
                 className={cn(
-                  'relative text-sm tracking-wide text-muted-foreground transition-colors hover:text-foreground',
+                  'relative whitespace-nowrap text-sm tracking-wide text-muted-foreground transition-colors hover:text-foreground',
                   pathname === item.href && 'text-foreground',
                 )}
               >
@@ -94,7 +94,7 @@ export function SiteHeader() {
           })}
         </nav>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle />
           <AdminNotifications />
           <AuthButtons user={user} />
@@ -102,7 +102,7 @@ export function SiteHeader() {
 
         <button
           type="button"
-          className="md:hidden"
+          className="lg:hidden"
           onClick={() => setOpen((v) => !v)}
           aria-label="Toggle menu"
           aria-expanded={open}
@@ -112,7 +112,7 @@ export function SiteHeader() {
       </div>
 
       {open && (
-        <div className="border-t border-border/60 bg-background md:hidden">
+        <div className="border-t border-border/60 bg-background lg:hidden">
           <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4">
             {NAV.map((item) => {
               const isCart = item.label === 'Cart'

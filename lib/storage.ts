@@ -14,12 +14,17 @@ function ensureDir(subdir: string): string {
 }
 
 export function saveBookFile(bookSlug: string, fileName: string, buffer: Buffer): string {
+  const safeSlug = bookSlug
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
   const ext = fileName.split('.').pop()?.toLowerCase() || 'pdf'
   const storedName = `${randomUUID()}.${ext}`
-  const dir = ensureDir(bookSlug)
+  const dir = ensureDir(safeSlug)
   const filePath = join(dir, storedName)
   writeFileSync(filePath, buffer)
-  return `/uploads/books/${bookSlug}/${storedName}`
+  return `/uploads/books/${safeSlug}/${storedName}`
 }
 
 export function getBookFilePath(relativeUrl: string): string {

@@ -155,6 +155,7 @@ export function CartView({
                 src={item.book.coverImage || '/placeholder.svg'}
                 alt={item.book.title}
                 fill
+                sizes="64px"
                 className="object-cover"
               />
             </div>

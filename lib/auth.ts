@@ -604,6 +604,10 @@ export async function getUserNameByEmail(email: string): Promise<string | null> 
   return store.users.get(userId)?.name ?? null
 }
 
+export async function emailExists(email: string): Promise<boolean> {
+  return (await getUserNameByEmail(email)) !== null
+}
+
 export async function isEmailVerified(email: string): Promise<boolean> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()

@@ -12,13 +12,13 @@ export function BookCard({ book, owned }: { book: Book; owned?: boolean }) {
       aria-label={`View ${book.title}`}
     >
       <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary shadow-sm ring-1 ring-border/60 transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-xl">
-        <Image
-          src={book.coverImage || '/placeholder.svg'}
-          alt={`Cover of ${book.title} by ${book.author}`}
-          fill
-          sizes="(max-width: 768px) 45vw, 22vw"
-          className="object-cover"
-        />
+          <Image
+            src={book.coverImage || '/placeholder.svg'}
+            alt={`Cover of ${book.title} by ${book.author}`}
+            fill
+            sizes="(max-width: 768px) 50vw, 25vw"
+            className="object-cover"
+          />
         {book.bestseller && !owned && (
           <span className="absolute left-3 top-3 rounded-full bg-primary px-3 py-1 text-[10px] font-medium uppercase tracking-luxe text-primary-foreground">
             Bestseller
@@ -53,7 +53,7 @@ export function BookCard({ book, owned }: { book: Book; owned?: boolean }) {
           )}
           <span className="flex items-center gap-1 text-sm text-muted-foreground">
             <Star className="size-3.5 fill-primary text-primary" />
-            {Number(book.rating).toFixed(1)}
+            {book.rating ? Number(book.rating).toFixed(1) : '—'}
           </span>
         </div>
       </div>

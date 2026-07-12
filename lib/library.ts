@@ -223,6 +223,13 @@ export async function addToCart(userId: string, bookId: number): Promise<void> {
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
+  const book = await db.select({ id: books.id, deleted: books.deleted, archived: books.archived })
+    .from(books)
+    .where(eq(books.id, bookId))
+    .limit(1)
+  if (book.length === 0) throw new Error('Book not found')
+  if (book[0].deleted || book[0].archived) throw new Error('This book is no longer available')
+
   const existing = await db.select({ id: cartTable.id })
     .from(cartTable)
     .where(and(eq(cartTable.userId, userId), eq(cartTable.bookId, bookId)))

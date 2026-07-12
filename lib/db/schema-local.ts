@@ -1,45 +1,22 @@
-import { sqliteTable, text, integer, uniqueIndex, index, customType } from 'drizzle-orm/sqlite-core'
-
-export const timestamp = customType<{ data: Date; driverData: number }>({
-  dataType() { return 'integer' },
-  toDriver(value: Date | number | undefined): number {
-    if (value === undefined || value === null) return 0
-    return value instanceof Date ? value.getTime() : Number(value)
-  },
-  fromDriver(value: number | bigint | null): Date {
-    if (value === null || value === undefined) return new Date(0)
-    return new Date(Number(value))
-  },
-})
-
-export const bool = customType<{ data: boolean; driverData: number }>({
-  dataType() { return 'integer' },
-  toDriver(value: boolean | number | undefined): number {
-    if (value === undefined || value === null) return 0
-    return value ? 1 : 0
-  },
-  fromDriver(value: number | bigint | null): boolean {
-    return Number(value) === 1
-  },
-})
+import { sqliteTable, text, integer, uniqueIndex, index } from 'drizzle-orm/sqlite-core'
 
 export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull(),
-  emailVerified: bool('email_verified').notNull().default(false),
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
   passwordHash: text('password_hash'),
-  isAdmin: bool('is_admin').notNull().default(false),
+  isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
   username: text('username'),
   phone: text('phone'),
-  showFullName: bool('show_full_name').notNull().default(false),
+  showFullName: integer('show_full_name', { mode: 'boolean' }).notNull().default(false),
   role: text('role').notNull().default('user'),
   rank: text('rank'),
   title: text('title'),
   permissions: text('permissions').notNull().default('[]'),
-  createdAt: timestamp('created_at').notNull(),
-  updatedAt: timestamp('updated_at').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => ({
   emailIdx: uniqueIndex('user_email_idx').on(table.email),
   roleIdx: index('user_role_idx').on(table.role),
@@ -47,10 +24,10 @@ export const user = sqliteTable('user', {
 
 export const session = sqliteTable('session', {
   id: text('id').primaryKey(),
-  expiresAt: timestamp('expires_at').notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   token: text('token').notNull(),
-  createdAt: timestamp('created_at').notNull(),
-  updatedAt: timestamp('updated_at').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
@@ -68,12 +45,12 @@ export const account = sqliteTable('account', {
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
-  accessTokenExpiresAt: timestamp('access_token_expires_at'),
-  refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+  accessTokenExpiresAt: integer('access_token_expires_at', { mode: 'timestamp_ms' }),
+  refreshTokenExpiresAt: integer('refresh_token_expires_at', { mode: 'timestamp_ms' }),
   scope: text('scope'),
   password: text('password'),
-  createdAt: timestamp('created_at').notNull(),
-  updatedAt: timestamp('updated_at').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => ({
   userIdx: index('account_user_idx').on(table.userId),
   providerIdx: index('account_provider_idx').on(table.providerId),
@@ -83,9 +60,9 @@ export const verification = sqliteTable('verification', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
-  expiresAt: timestamp('expires_at').notNull(),
-  createdAt: timestamp('created_at'),
-  updatedAt: timestamp('updated_at'),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }),
 }, (table) => ({
   identifierIdx: index('verification_identifier_idx').on(table.identifier),
   expiryIdx: index('verification_expiry_idx').on(table.expiresAt),
@@ -106,13 +83,13 @@ export const books = sqliteTable('books', {
   rating: text('rating').notNull().default('5.0'),
   reviewsCount: integer('reviews_count').notNull().default(0),
   pages: integer('pages').notNull().default(0),
-  featured: bool('featured').notNull().default(false),
-  bestseller: bool('bestseller').notNull().default(false),
+  featured: integer('featured', { mode: 'boolean' }).notNull().default(false),
+  bestseller: integer('bestseller', { mode: 'boolean' }).notNull().default(false),
   source: text('source').notNull().default('seed'),
-  archived: bool('archived').notNull().default(false),
-  deleted: bool('deleted').notNull().default(false),
-  createdAt: timestamp('created_at').notNull(),
-  updatedAt: timestamp('updated_at').notNull(),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  deleted: integer('deleted', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => ({
   slugIdx: uniqueIndex('books_slug_idx').on(table.slug),
   categoryIdx: index('books_category_idx').on(table.category),
@@ -131,11 +108,11 @@ export const userPurchases = sqliteTable('user_purchases', {
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   bookId: integer('book_id').notNull().references(() => books.id, { onDelete: 'cascade' }),
   bookSlug: text('book_slug').notNull(),
-  purchaseDate: timestamp('purchase_date').notNull(),
+  purchaseDate: integer('purchase_date', { mode: 'timestamp_ms' }).notNull(),
   paymentReference: text('payment_reference'),
-  released: bool('released').notNull().default(false),
-  releaseAt: timestamp('release_at'),
-  archived: bool('archived').notNull().default(false),
+  released: integer('released', { mode: 'boolean' }).notNull().default(false),
+  releaseAt: integer('release_at', { mode: 'timestamp_ms' }),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
 }, (table) => ({
   userIdx: index('purchases_user_idx').on(table.userId),
   bookIdx: index('purchases_book_idx').on(table.bookId),
@@ -150,7 +127,7 @@ export const cart = sqliteTable('cart', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
   bookId: integer('book_id').notNull().references(() => books.id, { onDelete: 'cascade' }),
-  addedAt: timestamp('added_at').notNull(),
+  addedAt: integer('added_at', { mode: 'timestamp_ms' }).notNull(),
 }, (table) => ({
   userIdx: index('cart_user_idx').on(table.userId),
   bookIdx: index('cart_book_idx').on(table.bookId),
@@ -167,10 +144,10 @@ export const pendingChanges = sqliteTable('pending_changes', {
   changes: text('changes').notNull().default('{}'),
   submittedBy: text('submitted_by').notNull(),
   submittedByEmail: text('submitted_by_email').notNull(),
-  submittedAt: timestamp('submitted_at').notNull(),
+  submittedAt: integer('submitted_at', { mode: 'timestamp_ms' }).notNull(),
   status: text('status').notNull().default('pending'),
   reviewedBy: text('reviewed_by'),
-  reviewedAt: timestamp('reviewed_at'),
+  reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
 }, (table) => ({
   statusIdx: index('pending_changes_status_idx').on(table.status),
   slugIdx: index('pending_changes_slug_idx').on(table.bookSlug),

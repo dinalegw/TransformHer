@@ -122,11 +122,10 @@ export async function getBookBySlug(slug: string): Promise<Book | undefined> {
 
   const rows = await db.select()
     .from(books)
-    .where(and(eq(books.slug, slug), eq(books.deleted, false)))
+    .where(and(eq(books.slug, slug), eq(books.deleted, false), eq(books.archived, false)))
     .limit(1)
 
   if (rows.length === 0) return undefined
-  if (rows[0].archived) return undefined
   return rows[0]
 }
 

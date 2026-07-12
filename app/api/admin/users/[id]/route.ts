@@ -4,6 +4,7 @@ import {
   getUserById,
   setUserAdmin,
   demoteUserToRegular,
+  listAllUsers,
 } from '@/lib/auth'
 import { getDefaultPermissions, ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
 
@@ -76,8 +77,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireMasterAdmin()
+    const admin = await requireMasterAdmin()
     const { id } = await params
+
+    if (id === admin.id) {
+      return NextResponse.json({ error: 'You cannot demote yourself' }, { status: 400 })
+    }
 
     const user = await getUserById(id)
     if (!user) {
@@ -86,6 +91,20 @@ export async function DELETE(
 
     if (user.role === 'master_admin') {
       return NextResponse.json({ error: 'Cannot remove master admin' }, { status: 400 })
+    }
+
+    // Never leave the platform without a master admin.
+    if (user.role === 'admin') {
+      const allUsers = await listAllUsers()
+      const remainingMasters = allUsers.filter(
+        (u) => u.role === 'master_admin' && u.id !== id,
+      )
+      if (remainingMasters.length === 0) {
+        return NextResponse.json(
+          { error: 'Cannot demote the last master admin' },
+          { status: 400 },
+        )
+      }
     }
 
     await demoteUserToRegular(id)

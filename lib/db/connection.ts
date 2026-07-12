@@ -2,13 +2,9 @@ import { drizzle } from 'drizzle-orm/neon-serverless'
 import { Pool, type PoolConfig } from '@neondatabase/serverless'
 import * as schema from './schema'
 
-const MAX_RETRIES = 2
-const RETRY_DELAY_MS = 500
-
 let _pg: ReturnType<typeof drizzle<typeof schema>> | null = null
 let _pgPool: Pool | null = null
 let _pgSeeded = false
-let _fallbackAttempted = false
 let _usingFallback = false
 
 function getConnectionUrl(): string | null {
@@ -23,36 +19,30 @@ function getPoolConfig(): PoolConfig {
   const url = getConnectionUrl()
   if (!url) return { connectionString: '', max: 0 }
 
-  const isServerless = !!(
-    process.env.VERCEL
-    || process.env.POSTGRES_URL?.includes('pooler')
-  )
-
   return {
     connectionString: url,
-    max: isServerless ? 5 : 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 10000,
+    max: 1,
+    idleTimeoutMillis: 3000,
+    connectionTimeoutMillis: 3000,
   }
 }
 
-async function wait(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+async function tryConnect(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
+  const url = getConnectionUrl()
+  if (!url) return null
 
-function isPoolReady(pool: Pool): Promise<boolean> {
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => resolve(false), 5000)
-    pool.connect((err, _client, release) => {
-      clearTimeout(timeout)
-      if (err) {
-        resolve(false)
-        return
-      }
-      if (release) release()
-      resolve(true)
-    })
-  })
+  const pool = new Pool(getPoolConfig())
+
+  try {
+    const client = await pool.connect()
+    client.release()
+    const db = drizzle(pool, { schema })
+    _pgPool = pool
+    return db
+  } catch {
+    await pool.end().catch(() => {})
+    return null
+  }
 }
 
 async function getLocalFallback() {
@@ -77,55 +67,23 @@ export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>>
   if (_pg) return _pg
   if (_usingFallback) return getLocalFallback() as any
 
-  const url = getConnectionUrl()
-  if (url) {
-    let lastError: Error | null = null
+  // Quick attempt (3s timeout, no retries) — silent on failure
+  const pg = await tryConnect()
+  if (pg) {
+    _pg = pg
 
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const config = getPoolConfig()
-        _pgPool = new Pool(config)
-
-        const ready = await isPoolReady(_pgPool)
-        if (!ready) {
-          await _pgPool.end().catch(() => {})
-          _pgPool = null
-          throw new Error('Database connection timeout')
-        }
-
-        _pg = drizzle(_pgPool, { schema })
-
-        if (!_pgSeeded) {
-          _pgSeeded = true
-          const { seedDbAdmin } = await import('@/lib/auth')
-          seedDbAdmin().catch(() => {})
-          const { seedInitialBooks } = await import('@/lib/db/seed')
-          seedInitialBooks().catch(() => {})
-        }
-
-        return _pg
-      } catch (err) {
-        lastError = err instanceof Error ? err : new Error(String(err))
-        console.error(`[db] PostgreSQL attempt ${attempt}/${MAX_RETRIES} failed:`, lastError.message)
-
-        if (_pgPool) {
-          await _pgPool.end().catch(() => {})
-          _pgPool = null
-        }
-
-        if (attempt < MAX_RETRIES) {
-          await wait(RETRY_DELAY_MS * attempt)
-        }
-      }
+    if (!_pgSeeded) {
+      _pgSeeded = true
+      const { seedDbAdmin } = await import('@/lib/auth')
+      seedDbAdmin().catch(() => {})
+      const { seedInitialBooks } = await import('@/lib/db/seed')
+      seedInitialBooks().catch(() => {})
     }
-    console.error('[db] PostgreSQL unavailable:', lastError?.message)
+
+    return _pg
   }
 
-  if (!_fallbackAttempted) {
-    _fallbackAttempted = true
-    console.log('[db] Falling back to SQLite (local database)')
-  }
-
+  // Fall back to SQLite — no error logs, no retries
   const localDb = await getLocalFallback()
   if (localDb) {
     _usingFallback = true
@@ -152,5 +110,4 @@ export async function closeDb() {
   }
   await closeLocalFallback()
   _usingFallback = false
-  _fallbackAttempted = false
 }

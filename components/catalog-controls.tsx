@@ -35,6 +35,12 @@ export function CatalogControls({
   const [isPending, startTransition] = useTransition()
   const [query, setQuery] = useState(q)
 
+  // Keep the input in sync if the search param changes externally
+  // (e.g. browser back/forward navigation).
+  useEffect(() => {
+    setQuery(q)
+  }, [q])
+
   const pushParams = useCallback(
     (updates: Record<string, string>) => {
       const params = new URLSearchParams(searchParams.toString())

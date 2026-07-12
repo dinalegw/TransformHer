@@ -70,7 +70,7 @@ export default async function HomePage() {
                 <div className="h-8 w-px bg-border" />
                 <div>
                   <span className="font-heading text-2xl text-foreground">
-                    6
+                    {CATEGORIES.length}
                   </span>
                   <p>Life-shaping themes</p>
                 </div>
@@ -99,7 +99,7 @@ export default async function HomePage() {
               {spotlight && (
                 <Link
                   href={`/books/${spotlight.slug}`}
-                  className="absolute -bottom-6 -left-4 hidden w-56 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-xl sm:flex"
+                  className="absolute -bottom-6 left-0 z-10 flex w-56 items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-xl sm:-left-4"
                 >
                   <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-md">
                     <Image

@@ -35,15 +35,18 @@ export function AuthButtons({ user }: { user: AuthUser | null | 'loading' }) {
 
   if (user) {
     const displayName = getDisplayName(user)
+    const initial = displayName?.charAt(0).toUpperCase() || '?'
     return (
       <div className="relative">
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm transition-colors hover:border-primary"
         >
           <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-            {displayName.charAt(0).toUpperCase()}
+            {initial}
           </span>
           <span className="hidden sm:inline text-muted-foreground">{displayName}</span>
         </button>

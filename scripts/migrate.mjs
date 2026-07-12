@@ -50,7 +50,7 @@ async function migrate() {
   }
 
   // Get applied migrations
-  const applied = await db.execute<{ hash: string }>(sql`
+  const applied = await db.execute(sql`
     SELECT hash FROM _drizzle_migrations ORDER BY id;
   `)
   const appliedHashes = new Set(applied.rows?.map(r => r.hash) ?? [])
