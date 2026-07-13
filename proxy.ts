@@ -25,7 +25,7 @@ function verifyToken(token: string): Record<string, unknown> | null {
   }
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/icon') || pathname.startsWith('/apple-icon') || pathname.startsWith('/uploads') || pathname.startsWith('/books/') || pathname === '/hero-reading.png') {
@@ -79,7 +79,7 @@ export function middleware(request: NextRequest) {
     `form-action 'self'`,
   ].join('; ')
 
-  const headers = {
+  const securityHeaders: Record<string, string> = {
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'SAMEORIGIN',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -89,10 +89,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (process.env.NODE_ENV === 'production') {
-    headers['Content-Security-Policy'] = csp
+    securityHeaders['Content-Security-Policy'] = csp
   }
 
-  for (const [key, value] of Object.entries(headers)) {
+  for (const [key, value] of Object.entries(securityHeaders)) {
     response.headers.set(key, value)
   }
 

@@ -66,7 +66,7 @@ async function closeLocalFallback() {
   }
 }
 
-export async function getDb() {
+export async function getDb(): Promise<any> {
   if (_pg) return _pg
   if (_usingFallback) return getLocalFallback()
   if (_connecting) return getLocalFallback()

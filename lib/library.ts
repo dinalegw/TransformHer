@@ -259,7 +259,7 @@ export async function checkoutCart(userId: string, paymentReference?: string): P
   const allBooks = await db.select({ id: books.id, slug: books.slug })
     .from(books)
 
-  const slugMap = new Map(allBooks.map(b => [b.id, b.slug]))
+  const slugMap = new Map(allBooks.map((b: { id: number; slug: string }) => [b.id, b.slug]))
 
   for (const item of items) {
     const existing = await db.select({ id: userPurchases.id })

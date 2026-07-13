@@ -371,7 +371,7 @@ export async function listPendingChanges(): Promise<PendingChange[]> {
     .where(eq(pendingChanges.status, 'pending'))
     .orderBy(desc(pendingChanges.submittedAt))
 
-  return rows.map(c => ({
+  return rows.map((c: { id: string; bookSlug: string; bookTitle: string; type: string; changes: string; submittedBy: string; submittedByEmail: string; submittedAt: Date; status: string; reviewedBy: string | null; reviewedAt: Date | null }) => ({
     id: c.id,
     bookSlug: c.bookSlug,
     bookTitle: c.bookTitle,
