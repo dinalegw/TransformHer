@@ -21,7 +21,24 @@
 
 ---
 
-**TransformHer** is a premium digital platform empowering girls and women to transform their lives through carefully curated eBooks, resources, and community — blending a world-class shopping experience with meaningful content.
+**TransformHer** is a full-stack web application — an online eBook marketplace built with Next.js — that lets users browse, purchase, and read digital books. Think of it like a small, purpose-built Amazon for eBooks, focused on empowering girls and women.
+
+### What This Project Does
+
+The platform has three main parts:
+
+1. **Storefront** — Anyone can visit the site, browse a catalog of books, and purchase them using Paystack (a Nigerian payment processor). After purchase, the book appears in the user's personal library where they can read it online.
+
+2. **Admin Dashboard** — Administrators can log into a private dashboard to add new books, manage users, view orders, and control the entire platform. There are two admin levels: *Master Admins* (full control) and *Sub-Admins* (limited permissions).
+
+3. **Authentication & Security** — Users sign up, log in, and manage their profiles. Features include email verification, password reset, and session-based authentication.
+
+### Who It's For
+
+- **Readers** — Women and girls looking for curated digital books
+- **Admins** — The team behind TransformHer who manage content and orders
+
+In short: **TransformHer is a digital bookstore with an admin backend, user accounts, and payment processing — built from scratch with modern web technologies.**
 
 ## ✦ What's Inside
 
