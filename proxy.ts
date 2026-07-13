@@ -1,21 +1,19 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
 
-const ADMIN_ROUTES = ['/admin']
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password']
-const API_AUTH_ROUTES = ['/api/auth/login', '/api/auth/register', '/api/auth/logout']
 
 function verifyToken(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.')
     if (parts.length !== 2) return null
-    const [data] = parts
+    const [data, sig] = parts
     const secret = process.env.AUTH_SECRET
     if (!secret) return null
-    const { createHmac, timingSafeEqual } = require('crypto')
-    const sig = createHmac('sha256', secret).update(data).digest('base64url')
-    const sigBuf = Buffer.from(parts[1])
-    const expectedBuf = Buffer.from(sig)
+    const expectedSig = createHmac('sha256', secret).update(data).digest('base64url')
+    const sigBuf = Buffer.from(sig)
+    const expectedBuf = Buffer.from(expectedSig)
     if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) return null
     const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf-8'))
     if (payload.exp && payload.exp < Date.now()) return null
@@ -59,10 +57,6 @@ export function proxy(request: NextRequest) {
 
   if (AUTH_ROUTES.some(route => pathname === route) && isAuthenticated) {
     return NextResponse.redirect(new URL('/', request.url))
-  }
-
-  if (pathname.startsWith('/api/auth/me') || pathname.startsWith('/api/cart') || pathname.startsWith('/api/library') || pathname.startsWith('/api/books/')) {
-    return NextResponse.next()
   }
 
   const response = NextResponse.next()
