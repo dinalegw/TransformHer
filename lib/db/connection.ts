@@ -6,6 +6,9 @@ let _pg: ReturnType<typeof drizzle<typeof schema>> | null = null
 let _pgPool: Pool | null = null
 let _pgSeeded = false
 let _usingFallback = false
+let _connecting = false
+let _connectAttempts = 0
+const MAX_RETRIES = 2
 
 function getConnectionUrl(): string | null {
   return process.env.POSTGRES_URL_NON_POOLING
@@ -63,35 +66,46 @@ async function closeLocalFallback() {
   }
 }
 
-export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
+export async function getDb() {
   if (_pg) return _pg
-  if (_usingFallback) return getLocalFallback() as any
+  if (_usingFallback) return getLocalFallback()
+  if (_connecting) return getLocalFallback()
 
-  // Quick attempt (3s timeout, no retries) — silent on failure
-  const pg = await tryConnect()
-  if (pg) {
-    _pg = pg
+  _connecting = true
+  _connectAttempts++
 
-    if (!_pgSeeded) {
-      _pgSeeded = true
-      const { seedDbAdmin } = await import('@/lib/auth')
-      seedDbAdmin().catch(() => {})
-      const { seedInitialBooks } = await import('@/lib/db/seed')
-      seedInitialBooks().catch(() => {})
+  try {
+    const pg = await tryConnect()
+    if (pg) {
+      _pg = pg
+      _connectAttempts = 0
+
+      if (!_pgSeeded) {
+        _pgSeeded = true
+        const { seedDbAdmin } = await import('@/lib/auth')
+        seedDbAdmin().catch(() => {})
+        const { seedInitialBooks } = await import('@/lib/db/seed')
+        seedInitialBooks().catch(() => {})
+      }
+
+      return _pg
     }
 
-    return _pg
-  }
+    if (_connectAttempts >= MAX_RETRIES) {
+      _connectAttempts = 0
+    }
 
-  // Fall back to SQLite — no error logs, no retries
-  const localDb = await getLocalFallback()
-  if (localDb) {
-    _usingFallback = true
-    _pgSeeded = true
-    return localDb as any
-  }
+    const localDb = await getLocalFallback()
+    if (localDb) {
+      _usingFallback = true
+      _pgSeeded = true
+      return localDb
+    }
 
-  return null
+    return null
+  } finally {
+    _connecting = false
+  }
 }
 
 export function isUsingLocalDb(): boolean {
@@ -110,4 +124,5 @@ export async function closeDb() {
   }
   await closeLocalFallback()
   _usingFallback = false
+  _connectAttempts = 0
 }
