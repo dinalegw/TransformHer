@@ -28,7 +28,7 @@
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.16.0",
-    "next": "16.2.6",
+    "next": "^9.3.3",
     "pg": "^8.22.0",
     "react": "^19",
     "react-dom": "^19",
@@ -47,7 +47,7 @@
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.10",
     "dotenv": "^17.4.2",
-    "drizzle-kit": "^0.31.10",
+    "drizzle-kit": "^0.18.1",
     "eslint": "^9.18.0",
     "eslint-config-next": "^16.2.6",
     "globals": "^15.14.0",
@@ -56,5 +56,12 @@
     "typescript": "5.7.3",
     "typescript-eslint": "^8.20.0",
     "vitest": "^4.1.10"
+  },
+  "allowScripts": {
+    "unrs-resolver@1.12.2": true,
+    "esbuild@0.18.20": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.1": true,
+    "sharp@0.34.5": true
   }
 }
