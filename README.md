@@ -14,60 +14,100 @@
   <img src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript" alt="TypeScript"/>
   <img src="https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat&logo=tailwindcss" alt="TailwindCSS"/>
   <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat&logo=drizzle" alt="Drizzle"/>
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql" alt="PostgreSQL"/>
   <img src="https://img.shields.io/badge/Paystack-00A3E0?style=flat&logo=paystack" alt="Paystack"/>
+  <img src="https://img.shields.io/badge/Courier-00D4AA?style=flat" alt="Courier"/>
   <img src="https://img.shields.io/badge/ESLint-4B32C3?style=flat&logo=eslint" alt="ESLint"/>
+  <img src="https://img.shields.io/badge/Vitest-6E9F18?style=flat&logo=vitest" alt="Vitest"/>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat" alt="MIT"/>
 </p>
 
 ---
 
-**TransformHer** is a full-stack web application — an online eBook marketplace built with Next.js — that lets users browse, purchase, and read digital books. Think of it like a small, purpose-built Amazon for eBooks, focused on empowering girls and women.
+**TransformHer** is a full-stack digital eBook marketplace built with Next.js — a small, purpose-built platform for purchasing and reading digital books focused on empowering girls and women.
 
-### What This Project Does
+The platform features a storefront for browsing and purchasing books via Paystack, a private admin dashboard with role-based access control, email notifications via Courier, a multi-theme reading experience, and a complete authentication system with email verification and password recovery.
 
-The platform has three main parts:
-
-1. **Storefront** — Anyone can visit the site, browse a catalog of books, and purchase them using Paystack (a Nigerian payment processor). After purchase, the book appears in the user's personal library where they can read it online.
-
-2. **Admin Dashboard** — Administrators can log into a private dashboard to add new books, manage users, view orders, and control the entire platform. There are two admin levels: *Master Admins* (full control) and *Sub-Admins* (limited permissions).
-
-3. **Authentication & Security** — Users sign up, log in, and manage their profiles. Features include email verification, password reset, and session-based authentication.
-
-### Who It's For
-
-- **Readers** — Women and girls looking for curated digital books
-- **Admins** — The team behind TransformHer who manage content and orders
-
-In short: **TransformHer is a digital bookstore with an admin backend, user accounts, and payment processing — built from scratch with modern web technologies.**
+---
 
 ## ✦ What's Inside
 
 ```
 transformher/
-├── app/            Next.js App Router (pages, API routes, auth)
-│   ├── api/        Backend API (auth, cart, paystack)
-│   ├── admin/      Admin dashboard (with sidebar layout)
-│   ├── books/      eBook marketplace & detail pages
-│   ├── cart/       Shopping cart
-│   ├── library/    My Library (purchased books)
-│   ├── profile/    Profile settings
-│   └── (auth)/     Auth pages (login, register, reset)
-├── components/     Shared UI components
-├── lib/            Utilities, DB, auth, cart, payments
-├── scripts/        DB migration & setup scripts
-└── public/         Static assets
+├── app/              Next.js App Router (pages, API routes, layouts)
+│   ├── (auth)/       Auth pages (login, signup, forgot/reset password)
+│   ├── admin/        Admin dashboard (sidebar layout + tabbed management)
+│   ├── api/          Backend API (auth, admin, cart, paystack, library)
+│   ├── books/        eBook catalog & detail pages
+│   ├── cart/         Shopping cart
+│   ├── library/      My Library (purchased books)
+│   ├── faq/          Frequently asked questions
+│   ├── profile/      Profile settings
+│   └── verify-email/ Email verification handler
+├── components/       Shared UI components (shadcn/ui, admin, site)
+├── lib/              Utilities, DB, auth, email, cart, payments
+├── data/             Local SQLite + JSON fallback data (dev)
+├── drizzle/          Drizzle ORM migrations
+├── scripts/          DB migration, Courier template setup, test utilities
+├── public/           Static assets (images, book files, uploads)
+└── .github/          CI workflow (typecheck, lint, test, build)
 ```
+
+---
+
+## ✦ Features
+
+### Storefront
+- Browse a catalog of books with search, category filter, and sort (popular, newest, price)
+- Book detail pages with descriptions, previews, and related recommendations
+- Shopping cart with add/remove and Paystack checkout
+- Personal library with 72-hour unlock timer and archive support
+- Online book reader with streaming file delivery
+- FAQ page with accordion-style questions
+
+### Authentication & Security
+- Custom auth system (PBKDF2 + HMAC session tokens)
+- Email verification flow with verification tokens
+- Password reset with email notification
+- Security notifications (login alerts, password changes)
+- Content Security Policy headers in production
+- Session-based cookies with secure/same-site attributes
+
+### Admin Dashboard
+- Persistent sidebar with tabbed management interface
+- Full book CRUD with PDF upload (extension + magic byte validation, 50 MB limit)
+- User management with search and role promotion
+- Order management with book unlock capability
+- Pending changes workflow (sub-admin submits, master approves/rejects)
+- Granular permission assignment per admin
+
+### Email System (Courier)
+- Welcome & email verification emails
+- Password reset and change confirmation
+- Login notifications and security alerts
+- Purchase confirmation and book release notifications
+- Admin order notifications
+- Invitation emails
+
+### Multi-Theme Reading
+- Light, dark, and `night-shift` (warm) reading modes
+- Inline script prevents theme flash on page load
 
 ## ✦ Stack
 
 | Layer | Tech |
 |-------|------|
-| **Frontend** | Next.js 16 · React 19 · TailwindCSS 4 · shadcn/ui |
-| **Backend** | Next.js API Routes · Drizzle ORM · NeonDB (PostgreSQL) |
+| **Frontend** | Next.js 16 · React 19 · TailwindCSS 4 · shadcn/ui · @base-ui/react · Lucide React |
+| **Backend** | Next.js API Routes · Drizzle ORM · NeonDB (PostgreSQL) / SQLite (dev) |
 | **Auth** | Custom (PBKDF2 + HMAC tokens) |
 | **Payments** | Paystack |
-| **Email** | Courier |
-| **Tooling** | TypeScript 5 · ESLint |
+| **Email** | Courier (12 notification templates) |
+| **Analytics** | Vercel Analytics |
+| **Testing** | Vitest |
+| **CI** | GitHub Actions (typecheck, lint, test, build) |
+| **Tooling** | TypeScript 5 · ESLint 9 · Prettier |
+
+---
 
 ## ✦ Role-Based Access Control
 
@@ -82,7 +122,6 @@ The platform features a **granular permission system** with three user roles:
 - Assign granular permissions to sub-admins
 - View all users with search
 - View all orders with unlock capability
-- Granular permission assignment per admin
 
 ### Sub-Admin
 - Book management (create, edit)
@@ -93,7 +132,9 @@ The platform features a **granular permission system** with three user roles:
 ### User
 - Browse and purchase books
 - Personal library with 72-hour unlock timer
-- Profile management
+- Profile management (name, username, phone, display preference)
+
+---
 
 ## ✦ Admin Portal
 
@@ -107,7 +148,6 @@ The admin portal includes a **persistent sidebar** with sections:
 | **Admins** | Master only | Manage administrators, assign permissions |
 | **Orders** | All admins | View all purchases, unlock books for users |
 | **Pending Changes** | Master only | Approve/reject sub-admin changes |
-| **Settings** | Master only | Platform configuration |
 
 ### Permissions System
 
@@ -127,6 +167,8 @@ Master admins can assign specific permissions to sub-admins:
 - `view_analytics` — View analytics and reports
 - `manage_settings` — Configure platform settings
 
+---
+
 ## ✦ Prerequisites
 
 - **Node.js** 20.19+ (uses [Next.js 16](https://nextjs.org))
@@ -145,58 +187,78 @@ cp .env.example .env.local
 npm run dev
 ```
 
+The app runs at [http://localhost:3000](http://localhost:3000). When no PostgreSQL URL is configured, it transparently falls back to a local SQLite database so the full UI remains functional during development.
+
+---
+
 ## ✦ Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start dev server |
+| `npm run dev` | Start Next.js dev server |
 | `npm run build` | Production build |
 | `npm run start` | Start production server |
-| `npm run typecheck` | Type-check with `tsc --noEmit` |
+| `npm run typecheck` | TypeScript type checking (`tsc --noEmit`) |
 | `npm run lint` | Run ESLint |
 | `npm test` | Run tests (Vitest) |
-| `npm run db:migrate` | Run DB migrations |
+| `npm run db:generate` | Generate Drizzle migrations from schema |
+| `npm run db:migrate` | Run pending migrations |
+| `npm run db:studio` | Open Drizzle Studio GUI |
+| `npm run db:push` | Push schema directly to database |
 | `node scripts/setup-templates.mjs` | Create/update Courier email templates |
+
+---
 
 ## ✦ Environment Variables
 
 ```env
 # Required
-AUTH_SECRET=your-secret-key              # HMAC secret for session tokens
+AUTH_SECRET=replace-with-a-long-random-string  # HMAC secret for session tokens
 
-# Database (at least one required)
-POSTGRES_URL_NON_POOLING=postgres://...  # NeonDB connection string
-POSTGRES_URL=postgres://...              # Pooled connection (fallback)
+# Database (at least one required for production)
+POSTGRES_URL_NON_POOLING=postgres://...         # NeonDB direct connection string
+POSTGRES_URL=postgres://...                     # Pooled connection (fallback)
 
 # Email (Courier)
-COURIER_API_KEY=pk_...                    # Courier API key
-COURIER_TEMPLATE_PASSWORD_RESET=...       # Password reset template ID
-COURIER_TEMPLATE_WELCOME_VERIFY=...       # Welcome + verification template ID
-COURIER_TEMPLATE_EMAIL_VERIFIED=...       # Email verified confirmation template ID
-COURIER_TEMPLATE_ORDER_CONFIRMATION=...   # Purchase confirmation template ID
-COURIER_TEMPLATE_BOOK_RELEASED=...        # Book released notification template ID
-COURIER_TEMPLATE_ADMIN_ORDER=...          # Admin order notification template ID
+COURIER_API_KEY=pk_...                          # Courier API key
+RENDERED_API_KEY=re_...                         # Rendered API key (fallback)
+COURIER_TEMPLATE_PASSWORD_RESET=...             # Password reset template ID
+COURIER_TEMPLATE_PASSWORD_RESET_CONFIRMATION=... # Password reset confirmation
+COURIER_TEMPLATE_PASSWORD_CHANGED=...           # Password changed notification
+COURIER_TEMPLATE_WELCOME_VERIFY=...             # Welcome + email verification
+COURIER_TEMPLATE_EMAIL_VERIFIED=...             # Email verified confirmation
+COURIER_TEMPLATE_VERIFY_NEW_EMAIL=...           # Verify new email
+COURIER_TEMPLATE_LOGIN_NOTIFICATION=...         # New login notification
+COURIER_TEMPLATE_SECURITY_ALERT=...             # Security alert
+COURIER_TEMPLATE_INVITATION=...                 # Admin invitation
+COURIER_TEMPLATE_ORDER_CONFIRMATION=...         # Purchase confirmation
+COURIER_TEMPLATE_BOOK_RELEASED=...              # Book released notification
+COURIER_TEMPLATE_ADMIN_ORDER=...               # Admin order notification
 
 # Payments (Paystack)
-PAYSTACK_SECRET_KEY=sk_test_...          # Paystack secret key
-NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_test_...  # Paystack public key
+PAYSTACK_SECRET_KEY=sk_test_...               # Paystack secret key
+NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_test_...   # Paystack public key
 
 # Admin
-ADMIN_EMAIL=admin@example.com            # Master admin email
-ADMIN_PASSWORD=YourPassword123           # Master admin password
+ADMIN_EMAIL=admin@transformher.com            # Master admin email
+ADMIN_PASSWORD=ChangeMeStrong123              # Master admin password
 
 # Optional
-NEXT_PUBLIC_BASE_URL=http://localhost:3000  # Public-facing URL
+NEXT_PUBLIC_BASE_URL=http://localhost:3000    # Public-facing URL
 ```
+
+---
 
 ## ✦ Default Admin Credentials
 
 When running locally without a database:
 
 - **Email:** Value of `ADMIN_EMAIL` env var (default: `admin@transformher.com`)
-- **Password:** Value of `ADMIN_PASSWORD` env var (default: `Admin@123`)
+- **Password:** Value of `ADMIN_PASSWORD` env var (default: `ChangeMeStrong123`)
 
 The admin user is auto-seeded on first startup. Password changes via env vars are synced on every restart.
+
+---
 
 ## ✦ API Routes
 
@@ -228,9 +290,15 @@ The admin user is auto-seeded on first startup. Password changes via env vars ar
 | `/api/cart` | DELETE | Auth | Remove from cart |
 | `/api/cart/checkout` | POST | Auth | Initialize checkout |
 | `/api/cart/checkout/confirm` | POST | Auth | Confirm purchase |
+| `/api/library` | GET | Auth | Get library items |
+| `/api/library/archive` | POST | Auth | Archive/unarchive item |
+| `/api/library/list` | GET | Auth | List all library items |
 | `/api/books/[slug]/read` | GET | Auth | Stream book file |
 | `/api/paystack/initialize` | POST | Auth | Initialize Paystack payment |
 | `/api/paystack/verify` | POST | Auth | Verify Paystack payment |
+| `/api/health` | GET | — | Health check |
+
+---
 
 ## ✦ Notes & Improvements
 
@@ -258,12 +326,18 @@ rendering correctness, and edge-case safety.
 - **Books** — archived books are filtered at the query level; slugs are sanitized
   on create/edit (closing path-traversal in file storage); the public book cache
   is invalidated when admins edit books so prices/titles update immediately.
+  Uploads are validated by extension **and** magic bytes (≤ 50 MB).
 - **Library** — a 72-hour unlock timer releases purchases and emails the reader;
-  `addToCart` rejects deleted/archived/out-of-stock books.
+  `addToCart` rejects deleted/archived/out-of-stock books. Users can archive
+  books in their library to declutter their view.
 - **Auth** — password reset no longer reveals whether an email is registered;
   the logout cookie mirrors the production `secure`/`sameSite` attributes; last
-  master admin and self-demotion are blocked; uploaded book files are validated
-  by extension **and** magic bytes (≤ 50 MB).
+  master admin and self-demotion are blocked; email verification is required
+  before purchase; security notifications are sent on new logins and password
+  changes.
+- **Security** — Content Security Policy headers applied via middleware in
+  production; HMAC-signed session tokens with configurable expiry; admin routes
+  are protected by middleware with re-authentication redirect on session expiry.
 - **Reading** — book files stream via `Readable.toWeb` for correct behavior on
   serverless runtimes, with inline `Content-Disposition`.
 
@@ -274,6 +348,15 @@ rendering correctness, and edge-case safety.
   store so the UI remains fully functional.
 - Public and admin queries are cached in-memory (TTL ~30–60s) and invalidated on
   mutation.
+- Local development uses `better-sqlite3` with JSON file fallbacks for auth and
+  cart data.
+
+### CI Pipeline
+
+GitHub Actions runs on every push and pull request to `main` — type checking,
+ESLint, Vitest tests (with coverage), and Next.js production build.
+
+---
 
 ## ✦ License
 
