@@ -28,7 +28,12 @@ export function saveBookFile(bookSlug: string, fileName: string, buffer: Buffer)
 }
 
 export function getBookFilePath(relativeUrl: string): string {
-  return join(process.cwd(), 'public', relativeUrl)
+  const publicDir = join(process.cwd(), 'public')
+  const resolved = join(publicDir, relativeUrl)
+  if (!resolved.startsWith(publicDir)) {
+    throw new Error('Invalid file path')
+  }
+  return resolved
 }
 
 export function deleteBookFile(relativeUrl: string): void {

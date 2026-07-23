@@ -4,8 +4,17 @@ import { initializePaystackPayment } from '@/lib/paystack'
 import { getBookBySlug } from '@/lib/books'
 import { getLibraryItem } from '@/lib/library'
 import { getBaseUrl } from '@/lib/utils'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  const rateLimit = checkRateLimit(req, '/api/paystack/initialize')
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+    )
+  }
+
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

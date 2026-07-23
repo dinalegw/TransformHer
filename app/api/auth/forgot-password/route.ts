@@ -2,9 +2,18 @@ import { NextResponse } from 'next/server'
 import { generateResetToken, emailExists } from '@/lib/auth'
 import { sendPasswordResetEmail } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   try {
+    const rateLimit = checkRateLimit(req, '/api/auth/forgot-password')
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+      )
+    }
+
     const { email } = await req.json()
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })

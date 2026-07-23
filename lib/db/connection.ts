@@ -3,7 +3,7 @@ import { Pool, type PoolConfig } from '@neondatabase/serverless'
 import * as schema from './schema'
 
 let _pg: ReturnType<typeof drizzle<typeof schema>> | null = null
-let _pgPool: ReturnType<typeof Pool> | null = null
+let _pgPool: import('@neondatabase/serverless').Pool | null = null
 let _pgSeeded = false
 let _connecting = false
 let _connectAttempts = 0

@@ -4,8 +4,17 @@ import { fetchCart } from '@/lib/library'
 import { initializePaystackPayment } from '@/lib/paystack'
 import { getAllMergedBooks } from '@/lib/admin-books'
 import { getBaseUrl } from '@/lib/utils'
+import { checkRateLimit } from '@/lib/rate-limit'
 
-export async function POST() {
+export async function POST(req: Request) {
+  const rateLimit = checkRateLimit(req, '/api/cart/checkout')
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+    )
+  }
+
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

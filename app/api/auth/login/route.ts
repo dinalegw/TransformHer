@@ -1,9 +1,18 @@
 import { NextResponse } from 'next/server'
 import { authenticateUser, createSession, validateEmail, validatePassword } from '@/lib/auth'
 import { sendLoginNotification } from '@/lib/email'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   try {
+    const rateLimit = checkRateLimit(req, '/api/auth/login')
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many login attempts', retryAfter: rateLimit.retryAfter },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+      )
+    }
+
     const body = await req.json()
     const { email, password } = body
 

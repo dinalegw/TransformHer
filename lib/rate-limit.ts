@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 
 const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   '/api/auth/login': { limit: 5, windowMs: 60_000 },
@@ -17,15 +16,15 @@ interface RateLimitEntry {
 
 const ipBuckets = new Map<string, { [key: string]: RateLimitEntry }>()
 
-function getClientIp(request: NextRequest): string {
+function getClientIp(request: Request): string {
   return (
-    request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-    request.headers.get('x-real-ip') ||
+    (request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()) ||
+    (request.headers.get('x-real-ip')) ||
     'unknown'
   )
 }
 
-export function checkRateLimit(request: NextRequest, route: string): { allowed: boolean; retryAfter?: number } {
+export function checkRateLimit(request: Request, route: string): { allowed: boolean; retryAfter?: number } {
   const config = RATE_LIMITS[route]
   if (!config) return { allowed: true }
 

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
 import { getAllMergedBooks } from '@/lib/admin-books'
 import { getDb, userPurchases, user as userTable } from '@/lib/db'
-import { eq, desc, asc, sql, and, or, ne } from 'drizzle-orm'
+import { eq, desc, sql } from 'drizzle-orm'
 
 export async function GET(req: Request) {
   try {
@@ -19,10 +19,6 @@ export async function GET(req: Request) {
 
     const allBooks = await getAllMergedBooks({ includeArchived: true })
     const bookBySlug = new Map(allBooks.map(b => [b.slug, b]))
-
-    const whereClause = and(
-      sql`${userPurchases.released} = true OR ${userPurchases.released} = false`,
-    )
 
     const baseQuery = db.select({
       id: userPurchases.id,
@@ -48,12 +44,12 @@ export async function GET(req: Request) {
     const enriched = orders.map((o: {
       id: number
       userId: string
-      userName?: string
-      userEmail?: string
+      userName: string | null
+      userEmail: string | null
       bookSlug: string
-      purchaseDate: Date | string
+      purchaseDate: Date
       released: boolean
-      releaseAt: Date | string | null
+      releaseAt: Date | null
       archived?: boolean
     }) => {
       const book = bookBySlug.get(o.bookSlug)
@@ -64,9 +60,9 @@ export async function GET(req: Request) {
         userEmail: o.userEmail ?? 'unknown@example.com',
         bookSlug: o.bookSlug,
         bookTitle: book?.title ?? o.bookSlug,
-        purchaseDate: o.purchaseDate instanceof Date ? o.purchaseDate.toISOString() : o.purchaseDate,
+        purchaseDate: o.purchaseDate.toISOString(),
         released: o.released,
-        releaseAt: o.releaseAt instanceof Date ? o.releaseAt.toISOString() : o.releaseAt,
+        releaseAt: o.releaseAt ? o.releaseAt.toISOString() : null,
         archived: o.archived,
       }
     })
