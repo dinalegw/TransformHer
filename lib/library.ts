@@ -2,7 +2,6 @@ import 'server-only'
 import { eq, and, lte } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { userPurchases, cart as cartTable, books } from '@/lib/db/schema'
-import { type Book } from '@/lib/db/schema'
 
 export interface LibraryItem {
   id: number
@@ -256,12 +255,26 @@ export async function checkoutCart(userId: string, paymentReference?: string): P
     .from(cartTable)
     .where(eq(cartTable.userId, userId))
 
-  const allBooks = await db.select({ id: books.id, slug: books.slug })
+  if (items.length === 0) return
+
+  const allBooks = await db.select({ id: books.id, slug: books.slug, deleted: books.deleted, archived: books.archived })
     .from(books)
+
+  const activeBookIds = new Set(
+    allBooks
+      .filter(b => !b.deleted && !b.archived)
+      .map(b => b.id)
+  )
 
   const slugMap = new Map(allBooks.map((b: { id: number; slug: string }) => [b.id, b.slug]))
 
   for (const item of items) {
+    if (!activeBookIds.has(item.bookId)) {
+      await db.delete(cartTable)
+        .where(and(eq(cartTable.userId, userId), eq(cartTable.bookId, item.bookId)))
+      continue
+    }
+
     const existing = await db.select({ id: userPurchases.id })
       .from(userPurchases)
       .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookId, item.bookId)))

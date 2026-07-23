@@ -1,6 +1,6 @@
 import 'server-only'
 import { eq, sql } from 'drizzle-orm'
-import { getDb, isUsingLocalDb } from './connection'
+import { getDb } from './connection'
 import { books } from './schema'
 import { SEED_BOOKS } from '@/lib/seed'
 

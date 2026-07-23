@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireMasterAdmin, getCurrentUser } from '@/lib/auth'
+import { requireMasterAdmin } from '@/lib/auth'
 import { approveChange } from '@/lib/admin-books'
 
 export async function POST(

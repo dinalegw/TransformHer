@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin, listAllUsers } from '@/lib/auth'
 import { getAllMergedBooks } from '@/lib/admin-books'
-import { fetchLibrary, releaseLibraryItem } from '@/lib/library'
-import { hasPermission } from '@/lib/permissions'
+import { fetchLibrary } from '@/lib/library'
 
 export async function GET() {
   try {

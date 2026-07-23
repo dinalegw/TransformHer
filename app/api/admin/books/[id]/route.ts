@@ -95,9 +95,10 @@ export async function DELETE(
 
       let book: Book | undefined
       if (slugParam) {
-        const db = await getDb()
-        if (db) {
-          const rows = await db.select().from(books).where(eq(books.slug, slugParam)).limit(1)
+      const db = await getDb()
+      if (db) {
+        const rows = await (db as { select: (...args: unknown[]) => Promise<unknown> }).select()
+          .from(books).where(eq(books.slug, slugParam)).limit(1)
           book = rows[0] as Book | undefined
         }
       } else if (!isNaN(bookId)) {

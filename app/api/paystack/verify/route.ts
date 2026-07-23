@@ -11,32 +11,34 @@ export async function POST(req: Request) {
 
     const result = await verifyPaystackPayment(reference)
 
-    if (result.status && result.data?.status === 'success' && result.data?.metadata) {
-      const { bookTitle, bookSlug } = result.data.metadata
-      const customerEmail = result.data.customer?.email ?? ''
-      const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
+    if (!result.status || result.data?.status !== 'success' || !result.data?.metadata) {
+      return NextResponse.json({ error: 'Payment verification failed' }, { status: 402 })
+    }
 
-      const book = bookSlug ? await getBookBySlug(bookSlug) : null
+    const { bookTitle, bookSlug } = result.data.metadata
+    const customerEmail = result.data.customer?.email ?? ''
+    const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
 
-      if (customerEmail) {
-        const customerName = result.data.customer?.first_name
+    const book = bookSlug ? await getBookBySlug(bookSlug) : null
+
+    if (customerEmail) {
+      const customerName = result.data.customer?.first_name
+        ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
+        : 'Valued Customer'
+      await sendPurchaseConfirmation(customerEmail, customerName, bookTitle ?? 'your book', amount)
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL
+    if (adminEmail && customerEmail) {
+      await sendAdminOrderNotification(
+        adminEmail,
+        customerEmail,
+        result.data.customer?.first_name
           ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
-          : 'Valued Customer'
-        await sendPurchaseConfirmation(customerEmail, customerName, bookTitle ?? 'your book', amount)
-      }
-
-      const adminEmail = process.env.ADMIN_EMAIL
-      if (adminEmail && customerEmail) {
-        await sendAdminOrderNotification(
-          adminEmail,
-          customerEmail,
-          result.data.customer?.first_name
-            ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
-            : 'Customer',
-          bookTitle ?? 'a book',
-          amount,
-        )
-      }
+          : 'Customer',
+        bookTitle ?? 'a book',
+        amount,
+      )
     }
 
     return NextResponse.json(result)

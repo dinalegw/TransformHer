@@ -64,7 +64,6 @@ export async function getAllBooks(opts?: {
   }
 
   if (opts?.q) {
-    const query = opts.q.toLowerCase()
     const rows = await db.select()
       .from(books)
       .where(and(...conditions))

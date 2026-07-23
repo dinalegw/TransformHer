@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
+import { checkRateLimit, applyRateLimitHeaders } from '@/lib/rate-limit'
+import { getRequestId } from '@/lib/request-id'
 
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password']
 
@@ -60,17 +62,20 @@ export function proxy(request: NextRequest) {
   }
 
   const response = NextResponse.next()
+  const requestId = getRequestId(request)
+  response.headers.set('X-Request-ID', requestId)
 
   const csp = [
-    `default-src 'self'`,
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co`,
-    `style-src 'self' 'unsafe-inline'`,
-    `img-src 'self' data: blob:`,
-    `font-src 'self' data:`,
-    `connect-src 'self' https://api.paystack.co`,
-    `frame-src https://standard.paystack.com`,
-    `base-uri 'self'`,
-    `form-action 'self'`,
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data: https:",
+    "connect-src 'self' https://api.paystack.co https://api.courier.com https://api.rendered.com",
+    "frame-src https://standard.paystack.co https://checkout.paystack.com",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "upgrade-insecure-requests",
   ].join('; ')
 
   const securityHeaders: Record<string, string> = {
@@ -80,6 +85,8 @@ export function proxy(request: NextRequest) {
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     'X-XSS-Protection': '0',
     'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
   }
 
   if (process.env.NODE_ENV === 'production') {
@@ -88,6 +95,27 @@ export function proxy(request: NextRequest) {
 
   for (const [key, value] of Object.entries(securityHeaders)) {
     response.headers.set(key, value)
+  }
+
+  if (pathname.startsWith('/api/')) {
+    const rateLimit = checkRateLimit(request, pathname)
+    if (!rateLimit.allowed) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Too many requests', retryAfter: rateLimit.retryAfter }),
+        {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateLimit.retryAfter),
+            'X-Request-ID': requestId,
+            ...Object.fromEntries(
+              Object.entries(securityHeaders).filter(([, v]) => v !== csp)
+            ),
+          },
+        }
+      )
+    }
+    applyRateLimitHeaders(response, pathname)
   }
 
   return response

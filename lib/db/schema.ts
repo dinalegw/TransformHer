@@ -9,8 +9,6 @@ import {
   pgEnum,
   index,
   uniqueIndex,
-  foreignKey,
-  check,
 } from 'drizzle-orm/pg-core'
 
 /* ------------------------------------------------------------------ */

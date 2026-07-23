@@ -67,7 +67,7 @@ async function closeLocalFallback() {
 }
 
 export async function getDb(): Promise<any> {
-  if (_pg) return _pg
+  if (_pg) return _pg as unknown
   if (_usingFallback) return getLocalFallback()
   if (_connecting) return getLocalFallback()
 
@@ -88,7 +88,7 @@ export async function getDb(): Promise<any> {
         seedInitialBooks().catch(() => {})
       }
 
-      return _pg
+      return _pg as unknown
     }
 
     if (_connectAttempts >= MAX_RETRIES) {
@@ -99,7 +99,7 @@ export async function getDb(): Promise<any> {
     if (localDb) {
       _usingFallback = true
       _pgSeeded = true
-      return localDb
+      return localDb as unknown
     }
 
     return null
