@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/set-state-in-effect -- Intentional: sync external data to local state */
+
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Shield, ShieldOff, UserCog, Star, Loader2, Search, X } from 'lucide-react'
@@ -18,13 +20,6 @@ interface StoredUser {
   username?: string
   permissions: Permission[]
 }
-
-const ADMIN_RANKS = [
-  { value: 'junior', label: 'Junior Admin' },
-  { value: 'senior', label: 'Senior Admin' },
-  { value: 'lead', label: 'Lead Admin' },
-  { value: 'master', label: 'Master Admin' },
-] as const
 
 const PERMISSION_LABELS: Record<Permission, string> = {
   view_books: 'View Books',

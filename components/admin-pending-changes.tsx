@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/set-state-in-effect -- Intentional: sync external data to local state */
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, X, Loader2, Clock } from 'lucide-react'
@@ -22,7 +24,6 @@ export function AdminPendingChanges() {
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [expanded, setExpanded] = useState<string | null>(null)
 
   const fetchPending = useCallback(async () => {
     try {

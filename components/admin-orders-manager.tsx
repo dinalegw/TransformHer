@@ -1,8 +1,10 @@
 'use client'
 
+/* eslint-disable react-hooks/set-state-in-effect -- Intentional: sync external data to local state */
+
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ShoppingBag, Search, Unlock, Loader2, Check, Clock, XCircle } from 'lucide-react'
+import { ShoppingBag, Search, Unlock, Loader2, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 

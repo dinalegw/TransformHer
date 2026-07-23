@@ -5,7 +5,7 @@ import { fetchLibrary } from '@/lib/library'
 
 export async function GET() {
   try {
-    const user = await requireAdmin()
+    const _user = await requireAdmin()
     const allUsers = await listAllUsers()
     const allBooks = await getAllMergedBooks({ includeArchived: true })
     const bookBySlug = new Map(allBooks.map(b => [b.slug, b]))

@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/set-state-in-effect -- Intentional: sync prop changes to local state */
+
 import { useState, useEffect } from 'react'
 import { ShoppingCart, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'

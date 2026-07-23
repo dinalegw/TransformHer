@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { verifyPaystackPayment } from '@/lib/paystack'
 import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
-import { getBookBySlug } from '@/lib/books'
 import { formatPrice } from '@/lib/format'
 
 export async function POST(req: Request) {
@@ -15,11 +14,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 402 })
     }
 
-    const { bookTitle, bookSlug } = result.data.metadata
+    const { bookTitle, bookSlug: _bookSlug } = result.data.metadata
     const customerEmail = result.data.customer?.email ?? ''
     const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
-
-    const book = bookSlug ? await getBookBySlug(bookSlug) : null
 
     if (customerEmail) {
       const customerName = result.data.customer?.first_name

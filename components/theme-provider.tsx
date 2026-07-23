@@ -1,5 +1,7 @@
 'use client'
 
+/* eslint-disable react-hooks/set-state-in-effect -- Intentional: initialize theme from localStorage/system preference */
+
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 
 export type Theme = 'light' | 'dark' | 'night-shift'

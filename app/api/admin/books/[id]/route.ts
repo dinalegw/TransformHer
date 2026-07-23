@@ -97,6 +97,7 @@ export async function DELETE(
       if (slugParam) {
       const db = await getDb()
       if (db) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dual DB support (PostgreSQL + SQLite fallback)
         const rows = await (db as any).select().from(books).where(eq(books.slug, slugParam)).limit(1)
           book = rows[0] as Book | undefined
         }

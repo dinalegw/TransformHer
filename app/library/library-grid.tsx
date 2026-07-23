@@ -6,7 +6,6 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BookOpen, Clock, EyeOff, Eye, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { formatPrice } from '@/lib/format'
 
 interface BookInfo {
   id: number | string

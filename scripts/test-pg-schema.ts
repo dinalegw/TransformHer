@@ -13,6 +13,7 @@ console.log('\n🧪 Testing pg-core schema queries via SQLite client\n')
 // `db` is the better-sqlite3 client, but we intentionally run pg-core column
 // definitions through it (they are plain column metadata at runtime). Cast to
 // `any` so the intentionally cross-dialect queries type-check.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Intentional: cross-dialect test
 const db: any = getLocalDb()
 if (!db) { console.error('no db'); process.exit(1) }
 
@@ -69,6 +70,7 @@ assert(f6.length >= 1, 'getCategoryCounts — groupBy with boolean WHERE')
 
 // Exact query from getRelatedBooks
 const f7 = db.select().from(books).where(and(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Intentional: cross-dialect enum cast
   eq(books.category, 'Mindset & Confidence' as any),
   ne(books.slug, 'the-confidence-code'),
   eq(books.deleted, false),
