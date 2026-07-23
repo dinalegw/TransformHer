@@ -83,7 +83,7 @@ const emptyForm: FormData = {
   slug: '',
 }
 
-export function AdminBookManager({ books, userRole, userEmail, userName }: AdminBookManagerProps) {
+export function AdminBookManager({ books, userRole }: AdminBookManagerProps) {
   const router = useRouter()
   const [modal, setModal] = useState<{ mode: FormMode; book?: MergedBook } | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)

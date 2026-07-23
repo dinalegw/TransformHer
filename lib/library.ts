@@ -258,7 +258,7 @@ export async function checkoutCart(userId: string, paymentReference?: string): P
   if (items.length === 0) return
 
   const allBooks = await db.select({ id: books.id, slug: books.slug, deleted: books.deleted, archived: books.archived })
-    .from(books)
+    .from(books) as Array<{ id: number; slug: string; deleted: boolean; archived: boolean }>
 
   const activeBookIds = new Set(
     allBooks

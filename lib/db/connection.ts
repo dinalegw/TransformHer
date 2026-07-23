@@ -66,6 +66,7 @@ async function closeLocalFallback() {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dual DB support (PostgreSQL + SQLite fallback)
 export async function getDb(): Promise<any> {
   if (_pg) return _pg as unknown
   if (_usingFallback) return getLocalFallback()
