@@ -35,7 +35,7 @@ function localSave(bookSlug: string, fileName: string, buffer: Buffer): string {
   const storedName = `${randomUUID()}.${ext}`
   const dir = ensureLocalDir(safeSlug)
   const filePath = join(dir, storedName)
-  require('fs').writeFileSync(filePath, buffer)
+  writeFileSync(filePath, buffer)
   return `/uploads/books/${safeSlug}/${storedName}`
 }
 
