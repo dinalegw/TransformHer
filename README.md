@@ -46,7 +46,6 @@ transformher/
 │   └── verify-email/ Email verification handler
 ├── components/       Shared UI components (shadcn/ui, admin, site)
 ├── lib/              Utilities, DB, auth, email, cart, payments
-├── data/             Local SQLite + JSON fallback data (dev)
 ├── drizzle/          Drizzle ORM migrations
 ├── scripts/          DB migration, Courier template setup, test utilities
 ├── public/           Static assets (images, book files, uploads)
@@ -66,12 +65,14 @@ transformher/
 - FAQ page with accordion-style questions
 
 ### Authentication & Security
-- Custom auth system (PBKDF2 + HMAC session tokens)
+- Custom auth system (PBKDF2 + timing-safe comparison + HMAC session tokens)
 - Email verification flow with verification tokens
 - Password reset with email notification
 - Security notifications (login alerts, password changes)
 - Content Security Policy headers in production
 - Session-based cookies with secure/same-site attributes
+- Session invalidation on admin permission changes (`tokenVersion`)
+- Rate limiting on auth, payment, and checkout endpoints
 
 ### Admin Dashboard
 - Persistent sidebar with tabbed management interface
@@ -98,7 +99,7 @@ transformher/
 | Layer | Tech |
 |-------|------|
 | **Frontend** | Next.js 16 · React 19 · TailwindCSS 4 · shadcn/ui · @base-ui/react · Lucide React |
-| **Backend** | Next.js API Routes · Drizzle ORM · NeonDB (PostgreSQL) / SQLite (dev) |
+| **Backend** | Next.js API Routes · Drizzle ORM · NeonDB (PostgreSQL) |
 | **Auth** | Custom (PBKDF2 + HMAC tokens) |
 | **Payments** | Paystack |
 | **Email** | Courier (12 notification templates) |
@@ -173,6 +174,7 @@ Master admins can assign specific permissions to sub-admins:
 
 - **Node.js** 20.19+ (uses [Next.js 16](https://nextjs.org))
 - **npm** (package manager — comes with Node.js)
+- **NeonDB PostgreSQL** connection string (for production / Vercel deployment)
 
 ## ✦ Getting Started
 
@@ -187,7 +189,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-The app runs at [http://localhost:3000](http://localhost:3000). When no PostgreSQL URL is configured, it transparently falls back to a local SQLite database so the full UI remains functional during development.
+The app runs at [http://localhost:3000](http://localhost:3000).
 
 ---
 
@@ -215,7 +217,7 @@ The app runs at [http://localhost:3000](http://localhost:3000). When no PostgreS
 # Required
 AUTH_SECRET=replace-with-a-long-random-string  # HMAC secret for session tokens
 
-# Database (at least one required for production)
+# Database (required)
 POSTGRES_URL_NON_POOLING=postgres://...         # NeonDB direct connection string
 POSTGRES_URL=postgres://...                     # Pooled connection (fallback)
 
@@ -250,8 +252,6 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000    # Public-facing URL
 ---
 
 ## ✦ Default Admin Credentials
-
-When running locally without a database:
 
 - **Email:** Value of `ADMIN_EMAIL` env var (default: `admin@transformher.com`)
 - **Password:** Value of `ADMIN_PASSWORD` env var (default: `ChangeMeStrong123`)
@@ -337,19 +337,20 @@ rendering correctness, and edge-case safety.
   changes.
 - **Security** — Content Security Policy headers applied via middleware in
   production; HMAC-signed session tokens with configurable expiry; admin routes
-  are protected by middleware with re-authentication redirect on session expiry.
+  are protected by middleware with live database state checks on every request;
+  admin sessions are invalidated when roles/permissions change; rate limiting is
+  enforced on auth, payment, and checkout endpoints; password verification uses
+  timing-safe comparison.
 - **Reading** — book files stream via `Readable.toWeb` for correct behavior on
   serverless runtimes, with inline `Content-Disposition`.
 
 ### Data layer
 
-- Uses **Drizzle ORM** over PostgreSQL (Neon) in production. In development, if
-  PostgreSQL is unavailable the app transparently falls back to a local SQLite
-  store so the UI remains fully functional.
+- Uses **Drizzle ORM** over PostgreSQL (NeonDB) in production.
 - Public and admin queries are cached in-memory (TTL ~30–60s) and invalidated on
   mutation.
-- Local development uses `better-sqlite3` with JSON file fallbacks for auth and
-  cart data.
+- Designed for Vercel serverless: no local filesystem fallback, no native
+  SQLite dependencies, single pooled NeonDB connection per serverless instance.
 
 ### CI Pipeline
 
