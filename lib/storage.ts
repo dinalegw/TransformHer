@@ -1,11 +1,23 @@
 import 'server-only'
-import { writeFileSync, existsSync, mkdirSync, createReadStream, statSync, unlinkSync } from 'fs'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
+import { put, del, get } from '@vercel/blob'
 
+/* ------------------------------------------------------------------ */
+/* Configuration                                                       */
+/* ------------------------------------------------------------------ */
+
+const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
+const USE_BLOB = !!BLOB_TOKEN
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads', 'books')
 
-function ensureDir(subdir: string): string {
+/* ------------------------------------------------------------------ */
+/* Local fallback helpers                                               */
+/* ------------------------------------------------------------------ */
+
+import { existsSync, mkdirSync, createReadStream, statSync, unlinkSync, writeFileSync } from 'fs'
+
+function ensureLocalDir(subdir: string): string {
   const dir = join(UPLOAD_DIR, subdir)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
@@ -13,7 +25,7 @@ function ensureDir(subdir: string): string {
   return dir
 }
 
-export function saveBookFile(bookSlug: string, fileName: string, buffer: Buffer): string {
+function localSave(bookSlug: string, fileName: string, buffer: Buffer): string {
   const safeSlug = bookSlug
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-')
@@ -21,46 +33,49 @@ export function saveBookFile(bookSlug: string, fileName: string, buffer: Buffer)
     .slice(0, 120)
   const ext = fileName.split('.').pop()?.toLowerCase() || 'pdf'
   const storedName = `${randomUUID()}.${ext}`
-  const dir = ensureDir(safeSlug)
+  const dir = ensureLocalDir(safeSlug)
   const filePath = join(dir, storedName)
-  writeFileSync(filePath, buffer)
+  require('fs').writeFileSync(filePath, buffer)
   return `/uploads/books/${safeSlug}/${storedName}`
 }
 
-export function getBookFilePath(relativeUrl: string): string {
+function localDelete(relativeUrl: string): void {
   const publicDir = join(process.cwd(), 'public')
   const resolved = join(publicDir, relativeUrl)
   if (!resolved.startsWith(publicDir)) {
     throw new Error('Invalid file path')
   }
-  return resolved
-}
-
-export function deleteBookFile(relativeUrl: string): void {
-  const filePath = getBookFilePath(relativeUrl)
   try {
-    if (existsSync(filePath)) {
-      unlinkSync(filePath)
+    if (existsSync(resolved)) {
+      unlinkSync(resolved)
     }
   } catch {
-    // file couldn't be removed, ignore
+    // ignore
   }
 }
 
-export function getFileStream(relativeUrl: string) {
-  const filePath = getBookFilePath(relativeUrl)
-  if (!existsSync(filePath)) return null
-  return createReadStream(filePath)
+function localStream(relativeUrl: string) {
+  const publicDir = join(process.cwd(), 'public')
+  const resolved = join(publicDir, relativeUrl)
+  if (!resolved.startsWith(publicDir)) return null
+  if (!existsSync(resolved)) return null
+  return createReadStream(resolved)
 }
 
-export function getFileSize(relativeUrl: string): number | null {
-  const filePath = getBookFilePath(relativeUrl)
-  if (!existsSync(filePath)) return null
-  const s = statSync(filePath)
+function localSize(relativeUrl: string): number | null {
+  const publicDir = join(process.cwd(), 'public')
+  const resolved = join(publicDir, relativeUrl)
+  if (!resolved.startsWith(publicDir)) return null
+  if (!existsSync(resolved)) return null
+  const s = statSync(resolved)
   return s?.size ?? null
 }
 
-export function getFileMimeType(fileName: string): string {
+/* ------------------------------------------------------------------ */
+/* MIME types                                                           */
+/* ------------------------------------------------------------------ */
+
+function getFileMimeType(fileName: string): string {
   const ext = fileName.split('.').pop()?.toLowerCase()
   const mimes: Record<string, string> = {
     pdf: 'application/pdf',
@@ -71,4 +86,76 @@ export function getFileMimeType(fileName: string): string {
     txt: 'text/plain',
   }
   return mimes[ext || 'pdf'] || 'application/octet-stream'
+}
+
+/* ------------------------------------------------------------------ */
+/* Public API                                                           */
+/* ------------------------------------------------------------------ */
+
+export async function saveBookFile(bookSlug: string, fileName: string, buffer: Buffer): Promise<string> {
+  if (USE_BLOB) {
+    const safeSlug = bookSlug
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 120)
+    const ext = fileName.split('.').pop()?.toLowerCase() || 'pdf'
+    const pathname = `uploads/books/${safeSlug}/${randomUUID()}.${ext}`
+
+    const blob = await put(pathname, Buffer.from(buffer), {
+      access: 'public',
+      token: BLOB_TOKEN,
+      addRandomSuffix: false,
+      contentType: getFileMimeType(fileName),
+    })
+
+    return blob.url
+  }
+
+  return localSave(bookSlug, fileName, buffer)
+}
+
+export async function deleteBookFile(relativeUrl: string): Promise<void> {
+  if (USE_BLOB) {
+    try {
+      await del(relativeUrl, { token: BLOB_TOKEN })
+    } catch {
+      // ignore
+    }
+    return
+  }
+
+  localDelete(relativeUrl)
+}
+
+export async function getFileStream(relativeUrl: string) {
+  if (USE_BLOB) {
+    try {
+      const result = await get(relativeUrl, { access: 'public', token: BLOB_TOKEN })
+      if (!result || result.statusCode !== 200) return null
+      return result.stream
+    } catch {
+      return null
+    }
+  }
+
+  return localStream(relativeUrl)
+}
+
+export async function getFileSize(relativeUrl: string): Promise<number | null> {
+  if (USE_BLOB) {
+    try {
+      const result = await get(relativeUrl, { access: 'public', token: BLOB_TOKEN })
+      if (!result || result.statusCode !== 200) return null
+      return result.blob.size ?? null
+    } catch {
+      return null
+    }
+  }
+
+  return Promise.resolve(localSize(relativeUrl))
+}
+
+export function getFileMimeTypeFromStorage(fileName: string): string {
+  return getFileMimeType(fileName)
 }

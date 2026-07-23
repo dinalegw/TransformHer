@@ -65,7 +65,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'File content does not match its type' }, { status: 400 })
     }
 
-    const fileUrl = saveBookFile(slug, file.name, buffer)
+    const fileUrl = await saveBookFile(slug, file.name, buffer)
 
     return NextResponse.json({ fileUrl, fileName: file.name })
   } catch (err) {

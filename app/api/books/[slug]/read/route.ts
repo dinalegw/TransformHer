@@ -3,7 +3,7 @@ import { Readable } from 'node:stream'
 import { getCurrentUser } from '@/lib/auth'
 import { ownsBookBySlug } from '@/lib/library'
 import { findAdminBookBySlug } from '@/lib/admin-books'
-import { getFileStream, getFileMimeType, getFileSize } from '@/lib/storage'
+import { getFileStream, getFileSize, getFileMimeTypeFromStorage } from '@/lib/storage'
 import { SEED_BOOKS } from '@/lib/seed'
 
 export async function GET(
@@ -36,22 +36,30 @@ export async function GET(
       return NextResponse.json({ error: 'No content file available for this book' }, { status: 404 })
     }
 
-    const stream = getFileStream(fileUrl)
+    const stream = await getFileStream(fileUrl)
     if (!stream) {
       return NextResponse.json({ error: 'Content file not found on server' }, { status: 404 })
     }
 
     const fileName = fileUrl.split('/').pop() || 'book.pdf'
-    const mimeType = getFileMimeType(fileName)
+    const mimeType = getFileMimeTypeFromStorage(fileName)
 
     const headers = new Headers()
     headers.set('Content-Type', mimeType)
     headers.set('Content-Disposition', `inline; filename="${fileName}"`)
 
-    const size = getFileSize(fileUrl)
+    const size = await getFileSize(fileUrl)
     if (size) headers.set('Content-Length', String(size))
 
-    return new Response(Readable.toWeb(stream) as ReadableStream, {
+    // Convert Node.js Readable to Web ReadableStream when needed.
+    // Vercel Blob already returns a Web ReadableStream.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cross-runtime stream conversion
+    const readable: ReadableStream<any> = stream instanceof ReadableStream
+      ? stream
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cross-runtime stream conversion
+      : (Readable as any).toWeb(stream as any)
+
+    return new Response(readable, {
       headers,
       status: 200,
     })

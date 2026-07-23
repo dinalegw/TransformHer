@@ -12,6 +12,9 @@ const nextConfig = {
       '@base-ui/react',
       'class-variance-authority',
     ],
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
   },
   async headers() {
     return [
