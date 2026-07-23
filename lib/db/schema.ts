@@ -49,11 +49,13 @@ export const user = pgTable('user', {
   rank: adminRankEnum('rank'),
   title: text('title'),
   permissions: text('permissions').notNull().default('[]'),
+  tokenVersion: integer('token_version').notNull().default(0),
   createdAt: timestamp('created_at').notNull().$default(() => new Date()),
   updatedAt: timestamp('updated_at').notNull().$default(() => new Date()),
 }, (table) => ({
   emailIdx: uniqueIndex('user_email_idx').on(table.email),
   roleIdx: index('user_role_idx').on(table.role),
+  tokenVersionIdx: index('user_token_version_idx').on(table.tokenVersion),
 }))
 
 export const session = pgTable('session', {

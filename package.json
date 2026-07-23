@@ -23,7 +23,6 @@
     "@trycourier/courier": "^7.11.0",
     "@vercel/analytics": "1.6.1",
     "better-auth": "^1.6.23",
-    "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
@@ -40,7 +39,6 @@
   "devDependencies": {
     "@eslint/js": "^9.18.0",
     "@tailwindcss/postcss": "^4.2.0",
-    "@types/better-sqlite3": "7.6.13",
     "@types/node": "^24",
     "@types/pg": "^8.20.0",
     "@types/react": "^19",
@@ -56,14 +54,5 @@
     "typescript": "5.7.3",
     "typescript-eslint": "^8.20.0",
     "vitest": "^4.1.10"
-  },
-  "allowScripts": {
-    "better-sqlite3@12.11.1": true,
-    "sharp@0.34.5": true,
-    "unrs-resolver@1.12.2": true,
-    "es5-ext@0.10.64": true,
-    "esbuild@0.18.20": true,
-    "esbuild@0.25.12": true,
-    "esbuild@0.28.1": true
   }
 }

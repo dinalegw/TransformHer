@@ -1,9 +1,7 @@
 import 'server-only'
 import { cookies } from 'next/headers'
 import { randomUUID, pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from 'crypto'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
-import { join } from 'path'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { user as userTable } from '@/lib/db/schema'
 import { MASTER_ADMIN_EMAIL, getDefaultPermissions } from '@/lib/permissions'
@@ -23,32 +21,6 @@ export interface AuthUser {
   permissions: Permission[]
 }
 
-interface StoredUser {
-  id: string
-  name: string
-  email: string
-  passwordHash: string
-  isAdmin: boolean
-  role: UserRole
-  rank?: AdminRank
-  title?: string
-  username?: string
-  phone?: string
-  showFullName: boolean
-  permissions: Permission[]
-}
-
-interface AuthStore {
-  users: Map<string, StoredUser>
-  emailIndex: Map<string, string>
-  resetTokens: Map<string, { email: string; exp: number }>
-  verificationTokens: Map<string, { email: string; exp: number }>
-}
-
-declare global {
-  var __authStore: AuthStore | undefined
-}
-
 function getSecret(): string {
   const secret = process.env.AUTH_SECRET
   if (!secret) {
@@ -63,88 +35,6 @@ function getSecret(): string {
   return secret
 }
 
-function getDataDir(): string {
-  return join(process.cwd(), 'data')
-}
-
-function getUsersFile(): string {
-  return join(getDataDir(), 'users.json')
-}
-
-function loadStore(): AuthStore {
-  const store: AuthStore = {
-    users: new Map(),
-    emailIndex: new Map(),
-    resetTokens: new Map(),
-    verificationTokens: new Map(),
-  }
-
-  try {
-    const file = getUsersFile()
-    if (existsSync(file)) {
-      const raw = readFileSync(file, 'utf-8')
-      const data = JSON.parse(raw)
-      if (Array.isArray(data.users)) {
-        for (const u of data.users) {
-          store.users.set(u.id, u)
-          store.emailIndex.set(u.email, u.id)
-        }
-      }
-      if (Array.isArray(data.resetTokens)) {
-        for (const t of data.resetTokens) {
-          store.resetTokens.set(t.token, { email: t.email, exp: t.exp })
-        }
-      }
-      if (Array.isArray(data.verificationTokens)) {
-        for (const t of data.verificationTokens) {
-          store.verificationTokens.set(t.token, { email: t.email, exp: t.exp })
-        }
-      }
-    }
-  } catch {
-    // corrupt file, start fresh
-  }
-
-  return store
-}
-
-function saveStore(store: AuthStore): void {
-  try {
-    const dir = getDataDir()
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    const data = {
-      users: Array.from(store.users.values()),
-      resetTokens: Array.from(store.resetTokens.entries()).map(([token, value]) => ({
-        token,
-        email: value.email,
-        exp: value.exp,
-      })),
-      verificationTokens: Array.from(store.verificationTokens.entries()).map(([token, value]) => ({
-        token,
-        email: value.email,
-        exp: value.exp,
-      })),
-    }
-    writeFileSync(getUsersFile(), JSON.stringify(data, null, 2), 'utf-8')
-  } catch {
-    // silently fail – data is still in memory
-  }
-}
-
-function getStore(): AuthStore {
-  if (!globalThis.__authStore) {
-    globalThis.__authStore = loadStore()
-    seedAdminUser(globalThis.__authStore)
-  }
-  return globalThis.__authStore
-}
-
-function persistStore(): void {
-  saveStore(getStore())
-}
-
 function hashPassword(password: string): string {
   const salt = randomBytes(16)
   const key = pbkdf2Sync(password, salt, 100000, 32, 'sha256')
@@ -155,7 +45,9 @@ function verifyPassword(password: string, stored: string): boolean {
   const [saltHex, keyHex] = stored.split(':')
   const salt = Buffer.from(saltHex, 'hex')
   const key = pbkdf2Sync(password, salt, 100000, 32, 'sha256')
-  return key.toString('hex') === keyHex
+  const expected = Buffer.from(keyHex, 'hex')
+  if (key.length !== expected.length) return false
+  return timingSafeEqual(key, expected)
 }
 
 function signToken(payload: Record<string, unknown>): string {
@@ -200,6 +92,37 @@ function parsePermissions(raw: unknown): Permission[] {
   return []
 }
 
+function mapDbUser(u: {
+  id: string
+  name: string
+  email: string
+  passwordHash?: string | null
+  isAdmin: boolean | null
+  role?: string | null
+  rank?: string | null
+  title?: string | null
+  username?: string | null
+  phone?: string | null
+  showFullName?: boolean | null
+  permissions?: unknown
+  tokenVersion?: number | null
+}): AuthUser {
+  const role = (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user')
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    isAdmin: u.isAdmin ?? false,
+    role,
+    rank: u.rank as AdminRank | undefined,
+    title: u.title ?? undefined,
+    username: u.username ?? undefined,
+    phone: u.phone ?? undefined,
+    showFullName: u.showFullName ?? false,
+    permissions: parsePermissions(u.permissions),
+  }
+}
+
 export function validateEmail(email: string): string | null {
   if (!email || typeof email !== 'string') return 'Email is required'
   const trimmed = email.trim()
@@ -219,7 +142,6 @@ export function validateName(name: string): string | null {
   if (!name || typeof name !== 'string') return 'Name is required'
   const trimmed = name.trim()
   if (!trimmed) return 'Name is required'
-  if (trimmed.length < 1) return 'Name is required'
   if (trimmed.length > 100) return 'Name must be at most 100 characters'
   return null
 }
@@ -235,45 +157,20 @@ export async function createUser(
 ): Promise<{ id: string; name: string; email: string }> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  if (db) {
-    const existing = await db.select({ id: userTable.id })
-      .from(userTable)
-      .where(eq(userTable.email, normalizedEmail))
-      .limit(1)
+  const existing = await db.select({ id: userTable.id })
+    .from(userTable)
+    .where(eq(userTable.email, normalizedEmail))
+    .limit(1)
 
-    if (existing.length > 0) {
-      throw new Error('An account with this email already exists')
-    }
-
-    const id = randomUUID()
-    const passwordHash = hashPassword(password)
-    await db.insert(userTable).values({
-      id,
-      name: name.trim(),
-      email: normalizedEmail,
-      passwordHash,
-      isAdmin,
-      role,
-      rank: rank ?? (isAdmin ? (role === 'master_admin' ? 'master' : 'junior') : undefined),
-      title: title ?? (isAdmin ? (role === 'master_admin' ? 'Master Admin' : undefined) : undefined),
-      permissions: serializePermissions(getDefaultPermissions(role)),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-
-    return { id, name: name.trim(), email: normalizedEmail }
-  }
-
-  // Fall back to in-memory for development
-  const store = getStore()
-  if (store.emailIndex.has(normalizedEmail)) {
+  if (existing.length > 0) {
     throw new Error('An account with this email already exists')
   }
 
   const id = randomUUID()
   const passwordHash = hashPassword(password)
-  const user: StoredUser = {
+  await db.insert(userTable).values({
     id,
     name: name.trim(),
     email: normalizedEmail,
@@ -281,16 +178,14 @@ export async function createUser(
     isAdmin,
     role,
     rank: rank ?? (isAdmin ? (role === 'master_admin' ? 'master' : 'junior') : undefined),
-    title,
-    showFullName: false,
-    permissions: getDefaultPermissions(role),
-  }
+    title: title ?? (isAdmin ? (role === 'master_admin' ? 'Master Admin' : undefined) : undefined),
+    permissions: serializePermissions(getDefaultPermissions(role)),
+    tokenVersion: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
 
-  store.users.set(id, user)
-  store.emailIndex.set(normalizedEmail, id)
-  persistStore()
-
-  return { id, name: user.name, email: normalizedEmail }
+  return { id, name: name.trim(), email: normalizedEmail }
 }
 
 export async function authenticateUser(
@@ -299,104 +194,76 @@ export async function authenticateUser(
 ): Promise<{ id: string; name: string; email: string; isAdmin: boolean; role: UserRole; rank?: AdminRank; title?: string; permissions: Permission[] } | null> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()
+  if (!db) return null
 
-  if (db) {
-    const rows = await db.select({
-      id: userTable.id,
-      name: userTable.name,
-      email: userTable.email,
-      passwordHash: userTable.passwordHash,
-      isAdmin: userTable.isAdmin,
-      role: userTable.role,
-      rank: userTable.rank,
-      title: userTable.title,
-      permissions: userTable.permissions,
-    })
-      .from(userTable)
-      .where(eq(userTable.email, normalizedEmail))
-      .limit(1)
+  const rows = await db.select({
+    id: userTable.id,
+    name: userTable.name,
+    email: userTable.email,
+    passwordHash: userTable.passwordHash,
+    isAdmin: userTable.isAdmin,
+    role: userTable.role,
+    rank: userTable.rank,
+    title: userTable.title,
+    permissions: userTable.permissions,
+    tokenVersion: userTable.tokenVersion,
+  })
+    .from(userTable)
+    .where(eq(userTable.email, normalizedEmail))
+    .limit(1)
 
-    if (rows.length === 0) return null
-    const user = rows[0]
-    if (!user.passwordHash) return null
-
-    const valid = verifyPassword(password, user.passwordHash)
-    if (!valid) return null
-
-    const role = (user.role as UserRole) || (user.isAdmin ? 'master_admin' : 'user')
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin ?? false,
-      role,
-      rank: user.rank as AdminRank | undefined,
-      title: user.title ?? undefined,
-      permissions: parsePermissions(user.permissions),
-    }
-  }
-
-  // Fall back to in-memory
-  const store = getStore()
-  const userId = store.emailIndex.get(normalizedEmail)
-  if (!userId) return null
-  const user = store.users.get(userId)
-  if (!user) return null
+  if (rows.length === 0) return null
+  const user = rows[0]
+  if (!user.passwordHash) return null
 
   const valid = verifyPassword(password, user.passwordHash)
   if (!valid) return null
 
-  return { id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, role: user.role, rank: user.rank, title: user.title, permissions: user.permissions }
+  const role = (user.role as UserRole) || (user.isAdmin ? 'master_admin' : 'user')
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    isAdmin: user.isAdmin ?? false,
+    role,
+    rank: user.rank as AdminRank | undefined,
+    title: user.title ?? undefined,
+    permissions: parsePermissions(user.permissions),
+  }
 }
 
 export async function createSession(userId: string): Promise<string> {
   const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  if (db) {
-    const rows = await db.select({
-      id: userTable.id,
-      name: userTable.name,
-      email: userTable.email,
-      isAdmin: userTable.isAdmin,
-      role: userTable.role,
-      rank: userTable.rank,
-      title: userTable.title,
-      permissions: userTable.permissions,
-    })
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .limit(1)
+  const rows = await db.select({
+    id: userTable.id,
+    name: userTable.name,
+    email: userTable.email,
+    isAdmin: userTable.isAdmin,
+    role: userTable.role,
+    rank: userTable.rank,
+    title: userTable.title,
+    permissions: userTable.permissions,
+    tokenVersion: userTable.tokenVersion,
+  })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1)
 
-    if (rows.length === 0) throw new Error('User not found')
-    const u = rows[0]
-
-    return signToken({
-      userId: u.id,
-      name: u.name,
-      email: u.email,
-      isAdmin: u.isAdmin ?? false,
-      role: (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user'),
-      rank: u.rank,
-      title: u.title,
-      permissions: parsePermissions(u.permissions),
-      exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
-    })
-  }
-
-  // Fall back to in-memory
-  const store = getStore()
-  const user = store.users.get(userId)
-  if (!user) throw new Error('User not found')
+  if (rows.length === 0) throw new Error('User not found')
+  const u = rows[0]
 
   return signToken({
-    userId: user.id,
-    name: user.name,
-    email: user.email,
-    isAdmin: user.isAdmin,
-    role: user.role,
-    rank: user.rank,
-    title: user.title,
-    permissions: user.permissions,
+    userId: u.id,
+    name: u.name,
+    email: u.email,
+    isAdmin: u.isAdmin ?? false,
+    role: (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user'),
+    rank: u.rank,
+    title: u.title,
+    permissions: parsePermissions(u.permissions),
+    tokenVersion: u.tokenVersion ?? 0,
     exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
   })
 }
@@ -413,65 +280,39 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   if (exp < Date.now()) return null
 
   const userId = payload.userId as string
+  const jwtTokenVersion = (payload.tokenVersion as number) ?? 0
 
   const db = await getDb()
-  if (db) {
-    const rows = await db.select({
-      id: userTable.id,
-      name: userTable.name,
-      email: userTable.email,
-      isAdmin: userTable.isAdmin,
-      username: userTable.username,
-      phone: userTable.phone,
-      showFullName: userTable.showFullName,
-      role: userTable.role,
-      rank: userTable.rank,
-      title: userTable.title,
-      permissions: userTable.permissions,
-    })
-      .from(userTable)
-      .where(eq(userTable.id, userId))
-      .limit(1)
+  if (!db) return null
 
-    if (rows.length === 0) return null
-    const u = rows[0]
-    const role = (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user')
-    return {
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      isAdmin: u.isAdmin ?? false,
-      role,
-      rank: u.rank as AdminRank | undefined,
-      title: u.title ?? undefined,
-      username: u.username ?? undefined,
-      phone: u.phone ?? undefined,
-      showFullName: u.showFullName ?? false,
-      permissions: parsePermissions(u.permissions),
-    }
-  }
+  const rows = await db.select({
+    id: userTable.id,
+    name: userTable.name,
+    email: userTable.email,
+    isAdmin: userTable.isAdmin,
+    username: userTable.username,
+    phone: userTable.phone,
+    showFullName: userTable.showFullName,
+    role: userTable.role,
+    rank: userTable.rank,
+    title: userTable.title,
+    permissions: userTable.permissions,
+    tokenVersion: userTable.tokenVersion,
+  })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1)
 
-  const store = getStore()
-  const user = store.users.get(userId)
-  if (!user) return null
+  if (rows.length === 0) return null
+  const u = rows[0]
 
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    isAdmin: user.isAdmin,
-    role: user.role,
-    rank: user.rank,
-    title: user.title,
-    username: user.username,
-    phone: user.phone,
-    showFullName: user.showFullName ?? false,
-    permissions: user.permissions,
-  }
+  if ((u.tokenVersion ?? 0) !== jwtTokenVersion) return null
+
+  return mapDbUser(u)
 }
 
 export async function deleteSession(): Promise<void> {
-  // cookie-based, nothing to clear server-side
+  // Cookie is cleared by the route handler.
 }
 
 export function generateResetToken(email: string): string {
@@ -494,23 +335,12 @@ export function verifyResetToken(token: string): string | null {
 export async function updatePassword(email: string, newPassword: string): Promise<boolean> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()
+  if (!db) return false
 
-  if (db) {
-    const passwordHash = hashPassword(newPassword)
-    await db.update(userTable)
-      .set({ passwordHash })
-      .where(eq(userTable.email, normalizedEmail))
-    return true
-  }
-
-  const store = getStore()
-  const userId = store.emailIndex.get(normalizedEmail)
-  if (!userId) return false
-  const user = store.users.get(userId)
-  if (!user) return false
-
-  user.passwordHash = hashPassword(newPassword)
-  persistStore()
+  const passwordHash = hashPassword(newPassword)
+  await db.update(userTable)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(userTable.email, normalizedEmail))
   return true
 }
 
@@ -520,31 +350,18 @@ export async function updateUser(
 ): Promise<boolean> {
   const normalizedEmail = updates.email ? normalizeEmail(updates.email) : undefined
   const db = await getDb()
+  if (!db) return false
 
-  if (db) {
-    const setValues: Record<string, unknown> = {}
-    if (updates.name) setValues.name = updates.name.trim()
-    if (updates.email) setValues.email = normalizedEmail
-    if (updates.username !== undefined) setValues.username = updates.username || null
-    if (updates.phone !== undefined) setValues.phone = updates.phone || null
-    if (updates.showFullName !== undefined) setValues.showFullName = updates.showFullName
+  const setValues: Record<string, unknown> = {}
+  if (updates.name) setValues.name = updates.name.trim()
+  if (updates.email) setValues.email = normalizedEmail
+  if (updates.username !== undefined) setValues.username = updates.username || null
+  if (updates.phone !== undefined) setValues.phone = updates.phone || null
+  if (updates.showFullName !== undefined) setValues.showFullName = updates.showFullName
 
-    if (Object.keys(setValues).length === 0) return true
+  if (Object.keys(setValues).length === 0) return true
 
-    await db.update(userTable).set(setValues).where(eq(userTable.id, userId))
-    return true
-  }
-
-  const store = getStore()
-  const user = store.users.get(userId)
-  if (!user) return false
-
-  if (updates.name) user.name = updates.name.trim()
-  if (updates.email) user.email = normalizedEmail!
-  if (updates.username !== undefined) user.username = updates.username || undefined
-  if (updates.phone !== undefined) user.phone = updates.phone || undefined
-  if (updates.showFullName !== undefined) user.showFullName = updates.showFullName
-  persistStore()
+  await db.update(userTable).set(setValues).where(eq(userTable.id, userId))
   return true
 }
 
@@ -568,59 +385,46 @@ export function verifyEmailToken(token: string): string | null {
 export async function markEmailVerified(email: string): Promise<void> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()
+  if (!db) return
 
-  if (db) {
-    await db.update(userTable)
-      .set({ emailVerified: true })
-      .where(eq(userTable.email, normalizedEmail))
-    return
-  }
-
-  const store = getStore()
-  const userId = store.emailIndex.get(normalizedEmail)
-  if (!userId) return
-  const user = store.users.get(userId)
-  if (user) {
-    ;(user as unknown as Record<string, unknown>).emailVerified = true
-    persistStore()
-  }
+  await db.update(userTable)
+    .set({ emailVerified: true, updatedAt: new Date() })
+    .where(eq(userTable.email, normalizedEmail))
 }
 
 export async function getUserNameByEmail(email: string): Promise<string | null> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()
+  if (!db) return null
 
-  if (db) {
-    const rows = await db.select({ name: userTable.name })
-      .from(userTable)
-      .where(eq(userTable.email, normalizedEmail))
-      .limit(1)
-    return rows.length > 0 ? rows[0].name : null
-  }
-
-  const store = getStore()
-  const userId = store.emailIndex.get(normalizedEmail)
-  if (!userId) return null
-  return store.users.get(userId)?.name ?? null
+  const rows = await db.select({ name: userTable.name })
+    .from(userTable)
+    .where(eq(userTable.email, normalizedEmail))
+    .limit(1)
+  return rows.length > 0 ? rows[0].name : null
 }
 
 export async function emailExists(email: string): Promise<boolean> {
-  return (await getUserNameByEmail(email)) !== null
+  const db = await getDb()
+  if (!db) return false
+
+  const rows = await db.select({ id: userTable.id })
+    .from(userTable)
+    .where(eq(userTable.email, normalizeEmail(email)))
+    .limit(1)
+  return rows.length > 0
 }
 
 export async function isEmailVerified(email: string): Promise<boolean> {
   const normalizedEmail = normalizeEmail(email)
   const db = await getDb()
+  if (!db) return false
 
-  if (db) {
-    const rows = await db.select({ emailVerified: userTable.emailVerified })
-      .from(userTable)
-      .where(eq(userTable.email, normalizedEmail))
-      .limit(1)
-    return rows.length > 0 ? (rows[0].emailVerified ?? false) : false
-  }
-
-  return true
+  const rows = await db.select({ emailVerified: userTable.emailVerified })
+    .from(userTable)
+    .where(eq(userTable.email, normalizedEmail))
+    .limit(1)
+  return rows.length > 0 ? (rows[0].emailVerified ?? false) : false
 }
 
 function getAdminEmail(): string {
@@ -629,44 +433,6 @@ function getAdminEmail(): string {
 
 function getAdminPassword(): string {
   return process.env.ADMIN_PASSWORD || 'Admin@123'
-}
-
-function seedAdminUser(store: AuthStore): void {
-  const adminEmail = getAdminEmail()
-  const normalizedEmail = normalizeEmail(adminEmail)
-  const existingUserId = store.emailIndex.get(normalizedEmail)
-  const passwordHash = hashPassword(getAdminPassword())
-
-  if (existingUserId) {
-    const existing = store.users.get(existingUserId)
-    if (existing) {
-      existing.passwordHash = passwordHash
-      existing.isAdmin = true
-      existing.role = 'master_admin'
-      existing.rank = 'master'
-      existing.title = 'Master Admin'
-      existing.permissions = getDefaultPermissions('master_admin')
-      saveStore(store)
-      return
-    }
-  }
-
-  const id = randomUUID()
-  const user: StoredUser = {
-    id,
-    name: 'Admin',
-    email: normalizedEmail,
-    passwordHash,
-    isAdmin: true,
-    role: 'master_admin',
-    rank: 'master',
-    title: 'Master Admin',
-    showFullName: false,
-    permissions: getDefaultPermissions('master_admin'),
-  }
-  store.users.set(id, user)
-  store.emailIndex.set(normalizedEmail, id)
-  saveStore(store)
 }
 
 let _seedingDbAdmin = false
@@ -697,6 +463,7 @@ export async function seedDbAdmin(): Promise<void> {
           rank: 'master',
           title: 'Master Admin',
           permissions: serializePermissions(getDefaultPermissions('master_admin')),
+          updatedAt: new Date(),
         })
         .where(eq(userTable.email, normalizedEmail))
       return
@@ -713,6 +480,7 @@ export async function seedDbAdmin(): Promise<void> {
       rank: 'master',
       title: 'Master Admin',
       permissions: serializePermissions(getDefaultPermissions('master_admin')),
+      tokenVersion: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
     }).catch(() => {
@@ -746,8 +514,6 @@ export async function getAdminUser(): Promise<AuthUser | null> {
   return user
 }
 
-/* ─── Admin user management ──────────────────────────────────────────── */
-
 export interface AdminUserListItem {
   id: string
   name: string
@@ -769,146 +535,77 @@ export interface AdminUserUpdate {
   permissions?: Permission[]
 }
 
-function mapDbUser(u: {
-  id: string
-  name: string
-  email: string
-  isAdmin: boolean | null
-  role?: string | null
-  rank?: string | null
-  title?: string | null
-  username?: string | null
-  phone?: string | null
-  showFullName?: boolean | null
-  permissions?: unknown
-}): AdminUserListItem {
-  return {
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    isAdmin: u.isAdmin ?? false,
-    role: (u.role as UserRole) || (u.isAdmin ? 'master_admin' : 'user'),
-    rank: u.rank as AdminRank | undefined,
-    title: u.title ?? undefined,
-    username: u.username ?? undefined,
-    phone: u.phone ?? undefined,
-    showFullName: u.showFullName ?? false,
-    permissions: parsePermissions(u.permissions),
-  }
-}
-
 export async function listAllUsers(): Promise<AdminUserListItem[]> {
   const db = await getDb()
-  if (db) {
-    const rows = await db.select({
-      id: userTable.id,
-      name: userTable.name,
-      email: userTable.email,
-      isAdmin: userTable.isAdmin,
-      role: userTable.role,
-      rank: userTable.rank,
-      title: userTable.title,
-      username: userTable.username,
-      phone: userTable.phone,
-      showFullName: userTable.showFullName,
-      permissions: userTable.permissions,
-    }).from(userTable)
-    return rows.map(mapDbUser)
-  }
+  if (!db) return []
 
-  const store = getStore()
-  return Array.from(store.users.values()).map(u => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    isAdmin: u.isAdmin,
-    role: u.role,
-    rank: u.rank,
-    title: u.title,
-    username: u.username,
-    phone: u.phone,
-    showFullName: u.showFullName ?? false,
-    permissions: u.permissions,
-  }))
+  const rows = await db.select({
+    id: userTable.id,
+    name: userTable.name,
+    email: userTable.email,
+    isAdmin: userTable.isAdmin,
+    role: userTable.role,
+    rank: userTable.rank,
+    title: userTable.title,
+    username: userTable.username,
+    phone: userTable.phone,
+    showFullName: userTable.showFullName,
+    permissions: userTable.permissions,
+  }).from(userTable)
+  return rows.map(mapDbUser)
 }
 
 export async function getUserById(id: string): Promise<AdminUserListItem | null> {
   const db = await getDb()
-  if (db) {
-    const rows = await db.select({
-      id: userTable.id,
-      name: userTable.name,
-      email: userTable.email,
-      isAdmin: userTable.isAdmin,
-      role: userTable.role,
-      rank: userTable.rank,
-      title: userTable.title,
-      username: userTable.username,
-      phone: userTable.phone,
-      showFullName: userTable.showFullName,
-      permissions: userTable.permissions,
-    })
-      .from(userTable)
-      .where(eq(userTable.id, id))
-      .limit(1)
-    return rows.length > 0 ? mapDbUser(rows[0]) : null
-  }
+  if (!db) return null
 
-  const store = getStore()
-  const u = store.users.get(id)
-  if (!u) return null
-  return {
-    id: u.id, name: u.name, email: u.email, isAdmin: u.isAdmin, role: u.role,
-    rank: u.rank, title: u.title, username: u.username, phone: u.phone,
-    showFullName: u.showFullName ?? false, permissions: u.permissions,
-  }
+  const rows = await db.select({
+    id: userTable.id,
+    name: userTable.name,
+    email: userTable.email,
+    isAdmin: userTable.isAdmin,
+    role: userTable.role,
+    rank: userTable.rank,
+    title: userTable.title,
+    username: userTable.username,
+    phone: userTable.phone,
+    showFullName: userTable.showFullName,
+    permissions: userTable.permissions,
+  })
+    .from(userTable)
+    .where(eq(userTable.id, id))
+    .limit(1)
+
+  return rows.length > 0 ? mapDbUser(rows[0]) : null
 }
 
 export async function setUserAdmin(id: string, updates: AdminUserUpdate): Promise<AdminUserListItem> {
   const db = await getDb()
-  if (db) {
-    const existing = await db.select({ id: userTable.id, role: userTable.role })
-      .from(userTable)
-      .where(eq(userTable.id, id))
-      .limit(1)
-    if (existing.length === 0) throw new Error('User not found')
+  if (!db) throw new Error('Database not available')
 
-    const setValues: Record<string, unknown> = {}
-    if (updates.role !== undefined) {
-      setValues.role = updates.role
-      setValues.isAdmin = updates.role === 'admin' || updates.role === 'master_admin'
-    }
-    if (updates.rank !== undefined) setValues.rank = updates.rank
-    if (updates.title !== undefined) setValues.title = updates.title || null
-    if (updates.permissions !== undefined) setValues.permissions = serializePermissions(updates.permissions)
+  const existing = await db.select({ id: userTable.id, role: userTable.role })
+    .from(userTable)
+    .where(eq(userTable.id, id))
+    .limit(1)
+  if (existing.length === 0) throw new Error('User not found')
 
-    if (Object.keys(setValues).length > 0) {
-      setValues.updatedAt = new Date()
-      await db.update(userTable).set(setValues).where(eq(userTable.id, id))
-    }
-    const updated = await getUserById(id)
-    if (!updated) throw new Error('User not found')
-    return updated
-  }
-
-  const store = getStore()
-  const user = store.users.get(id)
-  if (!user) throw new Error('User not found')
-
+  const setValues: Record<string, unknown> = {}
   if (updates.role !== undefined) {
-    user.role = updates.role
-    user.isAdmin = updates.role === 'admin' || updates.role === 'master_admin'
+    setValues.role = updates.role
+    setValues.isAdmin = updates.role === 'admin' || updates.role === 'master_admin'
   }
-  if (updates.rank !== undefined) user.rank = updates.rank
-  if (updates.title !== undefined) user.title = updates.title
-  if (updates.permissions !== undefined) user.permissions = updates.permissions
+  if (updates.rank !== undefined) setValues.rank = updates.rank
+  if (updates.title !== undefined) setValues.title = updates.title || null
+  if (updates.permissions !== undefined) setValues.permissions = serializePermissions(updates.permissions)
+  setValues.tokenVersion = sql`${userTable.tokenVersion} + 1`
 
-  persistStore()
-  return {
-    id: user.id, name: user.name, email: user.email, isAdmin: user.isAdmin, role: user.role,
-    rank: user.rank, title: user.title, username: user.username, phone: user.phone,
-    showFullName: user.showFullName ?? false, permissions: user.permissions,
+  if (Object.keys(setValues).length > 0) {
+    setValues.updatedAt = new Date()
+    await db.update(userTable).set(setValues).where(eq(userTable.id, id))
   }
+  const updated = await getUserById(id)
+  if (!updated) throw new Error('User not found')
+  return updated
 }
 
 export async function demoteUserToRegular(id: string): Promise<void> {

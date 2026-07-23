@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { checkRateLimit, applyRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestId } from '@/lib/request-id'
+import { getCurrentUser } from '@/lib/auth'
 
 const AUTH_ROUTES = ['/login', '/signup', '/forgot-password', '/reset-password']
 
@@ -25,7 +26,7 @@ function verifyToken(token: string): Record<string, unknown> | null {
   }
 }
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   if (pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/icon') || pathname.startsWith('/apple-icon') || pathname.startsWith('/uploads') || pathname.startsWith('/books/') || pathname === '/hero-reading.png') {
@@ -35,7 +36,6 @@ export function proxy(request: NextRequest) {
   const sessionToken = request.cookies.get('session')?.value
   const user = sessionToken ? verifyToken(sessionToken) : null
   const isAuthenticated = !!user
-  const isAdmin = user?.isAdmin === true || user?.role === 'master_admin' || user?.role === 'admin'
 
   if (pathname.startsWith('/admin')) {
     if (!isAuthenticated) {
@@ -43,7 +43,8 @@ export function proxy(request: NextRequest) {
       loginUrl.searchParams.set('redirect', pathname)
       return NextResponse.redirect(loginUrl)
     }
-    if (!isAdmin) {
+    const currentUser = await getCurrentUser()
+    if (!currentUser || !currentUser.isAdmin) {
       return NextResponse.redirect(new URL('/', request.url))
     }
   }
@@ -52,7 +53,8 @@ export function proxy(request: NextRequest) {
     if (!isAuthenticated) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    if (!isAdmin) {
+    const currentUser = await getCurrentUser()
+    if (!currentUser || !currentUser.isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }

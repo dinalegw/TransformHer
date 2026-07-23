@@ -3,9 +3,8 @@ import { Pool, type PoolConfig } from '@neondatabase/serverless'
 import * as schema from './schema'
 
 let _pg: ReturnType<typeof drizzle<typeof schema>> | null = null
-let _pgPool: Pool | null = null
+let _pgPool: ReturnType<typeof Pool> | null = null
 let _pgSeeded = false
-let _usingFallback = false
 let _connecting = false
 let _connectAttempts = 0
 const MAX_RETRIES = 2
@@ -48,29 +47,9 @@ async function tryConnect(): Promise<ReturnType<typeof drizzle<typeof schema>> |
   }
 }
 
-async function getLocalFallback() {
-  try {
-    const { getLocalDb } = await import('./local-connection')
-    return getLocalDb()
-  } catch {
-    return null
-  }
-}
-
-async function closeLocalFallback() {
-  try {
-    const { closeLocalDb } = await import('./local-connection')
-    closeLocalDb()
-  } catch {
-    // ignore
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Dual DB support (PostgreSQL + SQLite fallback)
-export async function getDb(): Promise<any> {
-  if (_pg) return _pg as unknown
-  if (_usingFallback) return getLocalFallback()
-  if (_connecting) return getLocalFallback()
+export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
+  if (_pg) return _pg
+  if (_connecting) return null
 
   _connecting = true
   _connectAttempts++
@@ -89,28 +68,17 @@ export async function getDb(): Promise<any> {
         seedInitialBooks().catch(() => {})
       }
 
-      return _pg as unknown
+      return _pg
     }
 
     if (_connectAttempts >= MAX_RETRIES) {
       _connectAttempts = 0
     }
 
-    const localDb = await getLocalFallback()
-    if (localDb) {
-      _usingFallback = true
-      _pgSeeded = true
-      return localDb as unknown
-    }
-
     return null
   } finally {
     _connecting = false
   }
-}
-
-export function isUsingLocalDb(): boolean {
-  return _usingFallback
 }
 
 export async function closeDb() {
@@ -123,7 +91,6 @@ export async function closeDb() {
     _pgPool = null
     _pg = null
   }
-  await closeLocalFallback()
-  _usingFallback = false
+  _pgSeeded = false
   _connectAttempts = 0
 }
