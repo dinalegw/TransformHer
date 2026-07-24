@@ -1,6 +1,6 @@
 # TransformHer
 
-A high-level digital publishing and ebook commerce platform built with Next.js. The application enables readers to browse books, purchase access, and consume content through a secure library experience, while giving administrators a role-based system to manage books, users, orders, and content approvals.
+TransformHer is an MVP digital publishing and ebook commerce platform built to help readers discover books, purchase access, and consume content through a secure, polished experience. The product is designed around a clear value proposition: simple discovery, trustworthy payments, protected access, and a clean admin workflow for managing a digital catalog.
 
 <p align="center">
   <img src="./public/hero-reading.png" alt="TransformHer" width="600" />
@@ -19,55 +19,67 @@ A high-level digital publishing and ebook commerce platform built with Next.js. 
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat" />
 </p>
 
-## Overview
+## Product Summary
 
-TransformHer is designed to support a modern digital content business with a simple operating model:
+TransformHer is an MVP for a digital marketplace focused on accessible learning and empowering content. It combines the following core layers:
 
-- readers can discover books, add them to a cart, and complete payment securely
-- users receive a personalized library experience with access control and archive support
-- administrators can manage products, users, approvals, and order fulfillment from one portal
-- the application is built with a secure authentication and notification layer to support production use
+- a customer-facing storefront for book discovery and purchase
+- a secure checkout flow powered by Paystack
+- a user library with access control and reading support
+- an admin dashboard for catalog and order operations
+- authentication, email verification, and notification workflows
 
-## What the Product Includes
+## MVP Scope
 
-### Customer-facing experience
-- storefront for browsing books
-- search and catalog organization
-- cart and checkout flow with Paystack
-- library access for purchased books
-- reading experience with theme support
+The current release is intentionally scoped to the essential product loop:
 
-### Admin experience
-- book management and upload workflow
+1. Browse and discover books
+2. Add books to cart and complete payment
+3. Access purchased content in a personal library
+4. Manage catalog, users, orders, and approvals from admin tools
+
+This keeps the product focused, testable, and deployment-ready while preserving a strong foundation for future growth.
+
+## Core Capabilities
+
+### Customer Experience
+- storefront browsing and catalog presentation
+- book detail and reading experience
+- shopping cart and checkout flow
+- personal library with unlock and archive behavior
+- theme-aware reading experience
+
+### Admin Experience
+- book creation, editing, upload, and management
 - user and order oversight
-- role-based permission controls
-- pending change approval process
+- permission-based admin access
+- approval workflow for content changes
 
-### Platform reliability
+### Trust and Reliability
+- secure authentication flow
 - email verification and password recovery
-- secure session handling
-- payment and checkout validation
-- moderation-friendly content workflows
+- payment validation and order protection
+- rate limiting and access control on sensitive routes
 
-## Architecture at a Glance
+## Technical Architecture
 
-The project is organized around a Next.js app with a clear separation between:
+The application is structured as a modern Next.js product with a clear separation between presentation, business logic, and data access:
 
-- the public storefront and content reader
-- authenticated user and library APIs
-- admin management APIs and permission checks
-- Drizzle-backed PostgreSQL persistence
-- external services for payments and email delivery
+- App Router frontend and route-based pages
+- API routes for auth, cart, payments, and library actions
+- Drizzle ORM with PostgreSQL persistence
+- external integrations for Paystack and Courier
+- a secure admin authorization model
 
 ## Getting Started
 
-### Requirements
+### Prerequisites
 
 - Node.js 20.19+
 - npm
-- PostgreSQL connection details
+- PostgreSQL-compatible database connection
 
-### Run locally
+### Local Setup
 
 ```bash
 npm install
@@ -75,9 +87,9 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Then open http://localhost:3000.
+The application runs locally at http://localhost:3000.
 
-## Useful Scripts
+## Project Scripts
 
 ```bash
 npm run dev
@@ -92,15 +104,15 @@ npm run db:studio
 npm run db:push
 ```
 
-## Environment Setup
+## Environment Configuration
 
-The project uses the sample environment file as the starting point:
+Use the provided environment template as the source of truth:
 
 ```bash
 cp .env.example .env.local
 ```
 
-At minimum, configure variables for authentication, database access, Paystack, Courier, and the seeded admin account.
+Required configuration includes authentication, database access, Paystack, Courier, and the seeded admin account.
 
 ## License
 
