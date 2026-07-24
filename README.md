@@ -1,6 +1,6 @@
 # Glow Scents
 
-A production-ready digital storefront and reader built with Next.js for selling and delivering premium ebooks. The platform combines a customer-facing catalog, secure checkout with Paystack, a role-based admin dashboard, and a resilient email and auth workflow.
+A high-level digital publishing and ebook commerce platform built with Next.js. The application enables readers to browse books, purchase access, and consume content through a secure library experience, while giving administrators a role-based system to manage books, users, orders, and content approvals.
 
 <p align="center">
   <img src="./public/hero-reading.png" alt="Glow Scents" width="600" />
@@ -21,68 +21,53 @@ A production-ready digital storefront and reader built with Next.js for selling 
 
 ## Overview
 
-Glow Scents is a full-stack ebook commerce and reading platform designed for publishing, selling, and managing digital content securely. It includes:
+Glow Scents is designed to support a modern digital content business with a simple operating model:
 
-- a public storefront with book discovery and browsing
-- authenticated user accounts with email verification and reset flows
-- Paystack-powered checkout
-- a protected admin portal with granular permissions
-- a library experience for purchased content with unlock and archive controls
-- email delivery and notification workflows through Courier
+- readers can discover books, add them to a cart, and complete payment securely
+- users receive a personalized library experience with access control and archive support
+- administrators can manage products, users, approvals, and order fulfillment from one portal
+- the application is built with a secure authentication and notification layer to support production use
 
-## Tech Stack
+## What the Product Includes
 
-- Frontend: Next.js 16, React 19, Tailwind CSS 4, shadcn/ui
-- Backend: Next.js App Router, API routes, Drizzle ORM
-- Database: PostgreSQL via NeonDB
-- Auth: custom secure session model with salted hashing and signed tokens
-- Payments: Paystack
-- Email: Courier
-- Testing: Vitest
-- Tooling: TypeScript, ESLint, Prettier
+### Customer-facing experience
+- storefront for browsing books
+- search and catalog organization
+- cart and checkout flow with Paystack
+- library access for purchased books
+- reading experience with theme support
 
-## Project Structure
+### Admin experience
+- book management and upload workflow
+- user and order oversight
+- role-based permission controls
+- pending change approval process
 
-```text
-app/              Next.js routes and pages
-components/       Shared UI components
-lib/              Business logic, auth, payments, email, storage
-drizzle/          SQL migrations
-public/           Static assets and uploaded content
-scripts/          Migration and template setup utilities
-```
+### Platform reliability
+- email verification and password recovery
+- secure session handling
+- payment and checkout validation
+- moderation-friendly content workflows
 
-## Core Features
+## Architecture at a Glance
 
-### Customer Experience
-- Product catalog with search and sorting
-- Book detail pages and reader experience
-- Cart and checkout flow
-- Personal library with purchase unlock and archive handling
-- Multi-theme reading interface
+The project is organized around a Next.js app with a clear separation between:
 
-### Admin Operations
-- Book CRUD and upload management
-- Role-based admin permissions
-- User and order management
-- Pending change review and approval workflow
-
-### Security and Reliability
-- Email verification and password recovery
-- Secure cookie-based sessions
-- Permission-aware middleware and access checks
-- Rate limiting on sensitive endpoints
-- Validation for uploads, checkout state, and payment confirmation
+- the public storefront and content reader
+- authenticated user and library APIs
+- admin management APIs and permission checks
+- Drizzle-backed PostgreSQL persistence
+- external services for payments and email delivery
 
 ## Getting Started
 
-### Prerequisites
+### Requirements
 
 - Node.js 20.19+
 - npm
-- PostgreSQL-compatible database connection
+- PostgreSQL connection details
 
-### Installation
+### Run locally
 
 ```bash
 npm install
@@ -90,28 +75,9 @@ cp .env.example .env.local
 npm run dev
 ```
 
-The app will be available at http://localhost:3000.
+Then open http://localhost:3000.
 
-## Environment Variables
-
-Use the sample file as the source of truth:
-
-```bash
-cp .env.example .env.local
-```
-
-Required variables include:
-
-- `AUTH_SECRET`
-- `POSTGRES_URL`
-- `POSTGRES_URL_NON_POOLING`
-- `PAYSTACK_SECRET_KEY`
-- `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`
-- `COURIER_API_KEY`
-- `ADMIN_EMAIL`
-- `ADMIN_PASSWORD`
-
-## Common Scripts
+## Useful Scripts
 
 ```bash
 npm run dev
@@ -126,9 +92,15 @@ npm run db:studio
 npm run db:push
 ```
 
-## Admin Access
+## Environment Setup
 
-The default admin account is seeded from environment variables. Change the values in `.env.local` before first run if you need a custom bootstrap admin user.
+The project uses the sample environment file as the starting point:
+
+```bash
+cp .env.example .env.local
+```
+
+At minimum, configure variables for authentication, database access, Paystack, Courier, and the seeded admin account.
 
 ## License
 
