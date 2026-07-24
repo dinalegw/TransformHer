@@ -1,9 +1,9 @@
-# Glow Scents
+# TransformHer
 
 A high-level digital publishing and ebook commerce platform built with Next.js. The application enables readers to browse books, purchase access, and consume content through a secure library experience, while giving administrators a role-based system to manage books, users, orders, and content approvals.
 
 <p align="center">
-  <img src="./public/hero-reading.png" alt="Glow Scents" width="600" />
+  <img src="./public/hero-reading.png" alt="TransformHer" width="600" />
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@ A high-level digital publishing and ebook commerce platform built with Next.js. 
 
 ## Overview
 
-Glow Scents is designed to support a modern digital content business with a simple operating model:
+TransformHer is designed to support a modern digital content business with a simple operating model:
 
 - readers can discover books, add them to a cart, and complete payment securely
 - users receive a personalized library experience with access control and archive support
