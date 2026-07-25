@@ -2,9 +2,13 @@
 
 TransformHer is an MVP digital publishing and ebook commerce platform built to help readers discover books, purchase access, and consume content through a secure, polished experience. The product is designed around a clear value proposition: simple discovery, trustworthy payments, protected access, and a clean admin workflow for managing a digital catalog.
 
+
+
 <p align="center">
   <img src="./public/hero-reading.png" alt="TransformHer" width="600" />
 </p>
+
+
 
 <p align="center">
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js" />
