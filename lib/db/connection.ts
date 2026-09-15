@@ -11,11 +11,11 @@ let _connectAttempts = 0
 const MAX_RETRIES = 2
 
 async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>) {
-  await db.execute(sql`DO $ BEGIN CREATE TYPE "user_role" AS ENUM ('user', 'admin', 'master_admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $;`)
-  await db.execute(sql`DO $ BEGIN CREATE TYPE "admin_rank" AS ENUM ('junior', 'senior', 'lead', 'master'); EXCEPTION WHEN duplicate_object THEN NULL; END $;`)
-  await db.execute(sql`DO $ BEGIN CREATE TYPE "book_source" AS ENUM ('seed', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $;`)
+  await db.execute(sql.raw(`DO $$ BEGIN CREATE TYPE "user_role" AS ENUM ('user', 'admin', 'master_admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`))
+  await db.execute(sql.raw(`DO $$ BEGIN CREATE TYPE "admin_rank" AS ENUM ('junior', 'senior', 'lead', 'master'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`))
+  await db.execute(sql.raw(`DO $$ BEGIN CREATE TYPE "book_source" AS ENUM ('seed', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`))
   await db.execute(sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "role" "user_role" NOT NULL DEFAULT 'user', ADD COLUMN IF NOT EXISTS "rank" "admin_rank", ADD COLUMN IF NOT EXISTS "title" text, ADD COLUMN IF NOT EXISTS "permissions" text NOT NULL DEFAULT '[]', ADD COLUMN IF NOT EXISTS "token_version" integer NOT NULL DEFAULT 0;`)
-  await db.execute(sql`ALTER TABLE "books" ADD COLUMN IF NOT EXISTS "file_url" text, ADD COLUMN IF NOT EXISTS "source" "book_source" NOT NULL DEFAULT 'seed', ADD COLUMN IF NOT EXISTS "archived" boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false;`)
+  await db.execute(sql`ALTER TABLE "books" ADD COLUMN IF NOT EXISTS "file_url" text, ADD COLUMN IF NOT EXISTS "source" "book_source" NOT NULL DEFAULT 'seed', ADD COLUMN IF NOT EXISTS "archived" boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "updated_at" timestamp NOT NULL DEFAULT now();`)
 }
 
 function getConnectionUrl(): string | null {
