@@ -63,9 +63,9 @@ export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>>
       if (!_pgSeeded) {
         _pgSeeded = true
         const { seedDbAdmin } = await import('@/lib/auth')
-        seedDbAdmin().catch(() => {})
+        await seedDbAdmin().catch(() => {})
         const { seedInitialBooks } = await import('@/lib/db/seed')
-        seedInitialBooks().catch(() => {})
+        await seedInitialBooks().catch(() => {})
       }
 
       return _pg
