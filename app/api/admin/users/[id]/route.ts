@@ -3,8 +3,7 @@ import {
   requireMasterAdmin,
   getUserById,
   setUserAdmin,
-  demoteUserToRegular,
-  listAllUsers,
+  deleteUserAndData,
 } from '@/lib/auth'
 import { getDefaultPermissions, ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
 
@@ -81,7 +80,7 @@ export async function DELETE(
     const { id } = await params
 
     if (id === admin.id) {
-      return NextResponse.json({ error: 'You cannot demote yourself' }, { status: 400 })
+      return NextResponse.json({ error: 'You cannot delete your own account from the admin dashboard' }, { status: 400 })
     }
 
     const user = await getUserById(id)
@@ -93,22 +92,8 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot remove master admin' }, { status: 400 })
     }
 
-    // Never leave the platform without a master admin.
-    if (user.role === 'admin') {
-      const allUsers = await listAllUsers()
-      const remainingMasters = allUsers.filter(
-        (u) => u.role === 'master_admin' && u.id !== id,
-      )
-      if (remainingMasters.length === 0) {
-        return NextResponse.json(
-          { error: 'Cannot demote the last master admin' },
-          { status: 400 },
-        )
-      }
-    }
-
-    await demoteUserToRegular(id)
-    return NextResponse.json({ success: true })
+    await deleteUserAndData(user.id, user.email)
+    return NextResponse.json({ success: true, message: 'User account and associated data were permanently deleted.' })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

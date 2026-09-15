@@ -19,5 +19,7 @@ coverage
 .DS_Store
 
 data/
+/public/uploads/
+*.tsbuildinfo
 .env*
 !.env.example

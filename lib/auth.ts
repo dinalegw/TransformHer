@@ -3,7 +3,15 @@ import { cookies } from 'next/headers'
 import { randomUUID, pbkdf2Sync, randomBytes, createHmac, timingSafeEqual } from 'crypto'
 import { eq, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
-import { user as userTable } from '@/lib/db/schema'
+import {
+  account,
+  cart,
+  pendingChanges,
+  session,
+  user as userTable,
+  userPurchases,
+  verification,
+} from '@/lib/db/schema'
 import { MASTER_ADMIN_EMAIL, getDefaultPermissions } from '@/lib/permissions'
 import type { UserRole, AdminRank, Permission } from '@/lib/permissions'
 
@@ -339,7 +347,7 @@ export async function updatePassword(email: string, newPassword: string): Promis
 
   const passwordHash = hashPassword(newPassword)
   await db.update(userTable)
-    .set({ passwordHash, updatedAt: new Date() })
+    .set({ passwordHash, tokenVersion: sql`${userTable.tokenVersion} + 1`, updatedAt: new Date() })
     .where(eq(userTable.email, normalizedEmail))
   return true
 }
@@ -432,7 +440,11 @@ function getAdminEmail(): string {
 }
 
 function getAdminPassword(): string {
-  return process.env.ADMIN_PASSWORD || 'Admin@123'
+  const password = process.env.ADMIN_PASSWORD
+  if (!password) {
+    throw new Error('ADMIN_PASSWORD is required to seed the initial admin account')
+  }
+  return password
 }
 
 let _seedingDbAdmin = false
@@ -452,24 +464,13 @@ export async function seedDbAdmin(): Promise<void> {
       .where(eq(userTable.email, normalizedEmail))
       .limit(1)
 
-    const passwordHash = hashPassword(getAdminPassword())
-
     if (existing.length > 0) {
-      await db.update(userTable)
-        .set({
-          isAdmin: true,
-          passwordHash,
-          role: 'master_admin',
-          rank: 'master',
-          title: 'Master Admin',
-          permissions: serializePermissions(getDefaultPermissions('master_admin')),
-          updatedAt: new Date(),
-        })
-        .where(eq(userTable.email, normalizedEmail))
+      // Seeding must never reset an existing account's password or privileges.
       return
     }
 
     const id = randomUUID()
+    const passwordHash = hashPassword(getAdminPassword())
     await db.insert(userTable).values({
       id,
       name: 'Admin',
@@ -614,5 +615,25 @@ export async function demoteUserToRegular(id: string): Promise<void> {
     rank: undefined,
     title: undefined,
     permissions: [],
+  })
+}
+
+/** Permanently remove a user and the data that belongs to their account. */
+export async function deleteUserAndData(id: string, email: string): Promise<void> {
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
+
+  await db.transaction(async (tx) => {
+    // These explicit deletes cover tables without a database foreign-key cascade.
+    await tx.delete(verification).where(eq(verification.identifier, normalizeEmail(email)))
+    await tx.delete(pendingChanges).where(eq(pendingChanges.submittedBy, id))
+
+    // The following are also protected by ON DELETE CASCADE. Keeping the deletes
+    // explicit makes the erasure scope clear and works with older installations.
+    await tx.delete(session).where(eq(session.userId, id))
+    await tx.delete(account).where(eq(account.userId, id))
+    await tx.delete(cart).where(eq(cart.userId, id))
+    await tx.delete(userPurchases).where(eq(userPurchases.userId, id))
+    await tx.delete(userTable).where(eq(userTable.id, id))
   })
 }

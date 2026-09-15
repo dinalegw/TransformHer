@@ -29,12 +29,17 @@ export async function POST(req: Request) {
       .map(i => allBooks.find(b => b.id === i.bookId))
       .filter((b): b is NonNullable<typeof b> => b != null)
 
+    if (cartBooks.length !== items.length || cartBooks.some(book => book.currency !== 'NGN')) {
+      return NextResponse.json({ error: 'Your cart contains unavailable or unsupported-currency books.' }, { status: 400 })
+    }
+
     const totalKobo = cartBooks.reduce((sum, b) => sum + Number(b.price), 0)
     const reference = `CART-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
 
     const result = await initializePaystackPayment({
       email: user.email,
-      amount: totalKobo,
+    amount: totalKobo,
+    currency: 'NGN',
       reference,
       metadata: {
         userId: user.id,

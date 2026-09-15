@@ -1,124 +1,121 @@
 # TransformHer
 
-TransformHer is an MVP digital publishing and ebook commerce platform built to help readers discover books, purchase access, and consume content through a secure, polished experience. The product is designed around a clear value proposition: simple discovery, trustworthy payments, protected access, and a clean admin workflow for managing a digital catalog.
+TransformHer is a Next.js ebook commerce platform for discovering books, paying with Paystack, managing a personal library, and operating a role-based admin dashboard.
 
+## Stack
 
+- Next.js 16, React 19, TypeScript, Tailwind CSS
+- PostgreSQL/Neon with Drizzle ORM
+- Paystack for payment initialization and server-side verification
+- Courier for transactional email orchestration
+- Vercel Blob for uploads in production
 
-<p align="center">
-  <img src="./public/hero-reading.png" alt="TransformHer" width="600" />
-</p>
+## Product capabilities
 
+- Account registration, sign-in, email verification, password reset, and profile updates
+- Book catalogue, cart, Paystack checkout, delayed library release, and protected reader endpoint
+- Admin catalogue management, approval workflow, order review, user roles, and permissions
+- Input validation, rate limiting, security headers, request IDs, and CI checks
 
+## Architecture
 
-<p align="center">
-  <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js" />
-  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript" />
-  <img alt="TailwindCSS" src="https://img.shields.io/badge/TailwindCSS-4-06B6D4?style=flat&logo=tailwindcss" />
-  <img alt="Drizzle" src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat&logo=drizzle" />
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql" />
-  <img alt="Paystack" src="https://img.shields.io/badge/Paystack-00A3E0?style=flat&logo=paystack" />
-  <img alt="Courier" src="https://img.shields.io/badge/Courier-00D4AA?style=flat" />
-  <img alt="Vitest" src="https://img.shields.io/badge/Vitest-6E9F18?style=flat&logo=vitest" />
-  <img alt="MIT" src="https://img.shields.io/badge/license-MIT-green?style=flat" />
-</p>
+`app/` contains pages and route handlers. `lib/` contains server-only domain logic:
 
-## Product Summary
+- `auth.ts` — signed sessions, password hashing, user and role management
+- `books.ts`, `library.ts`, `admin-books.ts` — catalogue, purchases, cart, and admin workflow
+- `paystack.ts` — payment provider client
+- `email.ts` — Courier notification client
+- `db/schema.ts` — Drizzle schema and indexes
 
-TransformHer is an MVP for a digital marketplace focused on accessible learning and empowering content. It combines the following core layers:
+## Local setup
 
-- a customer-facing storefront for book discovery and purchase
-- a secure checkout flow powered by Paystack
-- a user library with access control and reading support
-- an admin dashboard for catalog and order operations
-- authentication, email verification, and notification workflows
-
-## MVP Scope
-
-The current release is intentionally scoped to the essential product loop:
-
-1. Browse and discover books
-2. Add books to cart and complete payment
-3. Access purchased content in a personal library
-4. Manage catalog, users, orders, and approvals from admin tools
-
-This keeps the product focused, testable, and deployment-ready while preserving a strong foundation for future growth.
-
-## Core Capabilities
-
-### Customer Experience
-- storefront browsing and catalog presentation
-- book detail and reading experience
-- shopping cart and checkout flow
-- personal library with unlock and archive behavior
-- theme-aware reading experience
-
-### Admin Experience
-- book creation, editing, upload, and management
-- user and order oversight
-- permission-based admin access
-- approval workflow for content changes
-
-### Trust and Reliability
-- secure authentication flow
-- email verification and password recovery
-- payment validation and order protection
-- rate limiting and access control on sensitive routes
-
-## Technical Architecture
-
-The application is structured as a modern Next.js product with a clear separation between presentation, business logic, and data access:
-
-- App Router frontend and route-based pages
-- API routes for auth, cart, payments, and library actions
-- Drizzle ORM with PostgreSQL persistence
-- external integrations for Paystack and Courier
-- a secure admin authorization model
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20.19+
-- npm
-- PostgreSQL-compatible database connection
-
-### Local Setup
+Requirements: Node.js 20.19+ and a PostgreSQL-compatible database.
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
+npm run db:migrate
 npm run dev
 ```
 
-The application runs locally at http://localhost:3000.
+Open `http://localhost:3000`.
 
-## Project Scripts
+## Required environment variables
+
+Set these in `.env.local` for development and in Vercel for Production, Preview, and Development as appropriate:
 
 ```bash
-npm run dev
-npm run build
-npm run start
+AUTH_SECRET=long-random-secret
+POSTGRES_URL_NON_POOLING=postgres://...
+POSTGRES_URL=postgres://...
+PAYSTACK_SECRET_KEY=sk_...
+NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_...
+COURIER_API_KEY=...
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=use-a-unique-long-password
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+```
+
+Every `COURIER_TEMPLATE_*` variable in `.env.example` is required only if the corresponding email is sent. Keep all templates published and use IDs from the same Courier environment as `COURIER_API_KEY`.
+
+`ADMIN_PASSWORD` is only used to create the initial admin account. It is never safe to rely on a default password; no default is provided. Existing admin passwords are not reset at startup.
+
+## Courier email: required setup
+
+An accepted Courier request is not proof of delivery. Courier can accept a request and later show `UNMAPPED` when no active email provider/routing rule can handle it.
+
+1. In the selected Courier environment, connect an email provider (for example Resend) and verify its sending domain.
+2. Open Courier’s email channel/routing settings and make the connected provider the active route for email. `UNMAPPED` means this mapping is missing or inactive.
+3. Publish each template used by the app. Copy its template ID into the matching `COURIER_TEMPLATE_*` variable.
+4. Add `COURIER_API_KEY` and those template variables to Vercel, then redeploy.
+5. Trigger a password-reset email and inspect Courier’s message event timeline. Record the application log’s Courier request ID; use it to distinguish accepted, delivered, bounced, and undeliverable messages.
+
+Do not mix keys or template IDs from different Courier environments. The repository’s template helper currently creates only a subset of templates, so create or configure the remaining template IDs manually before enabling every notification type.
+
+## Security notes
+
+- Entitlements are granted only after server-side Paystack verification; client data is never trusted.
+- The Paystack callback checks payment status, owner, customer email, exact amount, currency, and expected book/cart metadata.
+- Do not store paid ebooks in `public/` or a public Git repository. Public Vercel Blob URLs are not access-controlled; use a private storage provider or signed, short-lived download URLs before treating content as protected.
+- Uploaded files are intentionally ignored from Git. Existing public upload URLs should be rotated or removed.
+- Run database migrations before deploying schema changes. Do not use `db:push` as a production migration workflow.
+
+## Database and account deletion
+
+The application persists user accounts, passwords, roles, sessions, carts, purchases, and verification records in PostgreSQL using Drizzle ORM. Configure `POSTGRES_URL_NON_POOLING` (or `POSTGRES_URL`) in Vercel, then run `npm run db:migrate` once against that database.
+
+The master administrator can permanently delete a non-master user from the Admin dashboard. This removes the account and its sessions, cart, purchases, linked account data, verification records, and pending changes. The operation is irreversible; the person must register again to use TransformHer.
+
+The catalogue is fictional sample content. The example prices are in NGN and are updated by migration `0002_update_sample_book_prices.sql`; change them in the Admin dashboard before offering real products for sale.
+
+## Quality checks
+
+```bash
 npm run typecheck
 npm run lint
 npm test
-npm run db:generate
-npm run db:migrate
-npm run db:studio
-npm run db:push
+npm run build
 ```
 
-## Environment Configuration
+## Scripts
 
-Use the provided environment template as the source of truth:
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` / `npm run start` | Production build and server |
+| `npm run db:generate` | Generate a Drizzle migration |
+| `npm run db:migrate` | Apply migrations |
+| `npm run db:studio` | Open Drizzle Studio |
+| `npm run typecheck`, `lint`, `test` | Quality gates |
 
-```bash
-cp .env.example .env.local
-```
+## Deployment checklist
 
-Required configuration includes authentication, database access, Paystack, Courier, and the seeded admin account.
+1. Configure all required production variables in Vercel.
+2. Run and verify migrations against production safely.
+3. Complete a real Paystack test payment and confirm one library record only.
+4. Test Courier delivery—not merely enqueueing—from the correct Courier environment.
+5. Verify non-admin, admin, and master-admin access paths.
 
 ## License
 
-This project is licensed under the MIT License.
-
+MIT.

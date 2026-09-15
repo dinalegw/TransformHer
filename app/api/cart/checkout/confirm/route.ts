@@ -21,11 +21,19 @@ export async function POST(req: Request) {
     }
 
     const ref = result.data.reference as string
+    const metadata = result.data.metadata
+    if (!metadata?.cartCheckout || metadata.userId !== user.id) {
+      return NextResponse.json({ error: 'Payment does not belong to this account' }, { status: 403 })
+    }
     const customerEmail = result.data.customer?.email as string | undefined
     const customerName = result.data.customer?.first_name
       ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
       : user.name ?? 'Valued Customer'
     const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
+
+    if (customerEmail && customerEmail.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      return NextResponse.json({ error: 'Payment email does not match this account' }, { status: 403 })
+    }
 
     const [items, allBooks] = await Promise.all([
       fetchCart(user.id),
@@ -37,6 +45,13 @@ export async function POST(req: Request) {
     }
 
     const bookMap = new Map(allBooks.map(b => [b.id, b]))
+    const expectedBookIds = items.map(item => item.bookId).sort((a, b) => a - b)
+    const paidBookIds = Array.isArray(metadata.bookIds)
+      ? metadata.bookIds.map(Number).sort((a, b) => a - b)
+      : []
+    if (expectedBookIds.length !== paidBookIds.length || expectedBookIds.some((id, index) => id !== paidBookIds[index])) {
+      return NextResponse.json({ error: 'Payment items do not match the current cart' }, { status: 402 })
+    }
 
     // Verify the amount Paystack actually collected matches the cart total.
     const verifiedKobo = Number(result.data.amount)
@@ -44,7 +59,7 @@ export async function POST(req: Request) {
       const book = bookMap.get(item.bookId)
       return book ? sum + Math.round(Number(book.price) * 100) : sum
     }, 0)
-    if (Math.abs(verifiedKobo - expectedKobo) > 0) {
+    if (result.data.currency !== 'NGN' || verifiedKobo !== expectedKobo) {
       return NextResponse.json({ error: 'Payment amount mismatch' }, { status: 402 })
     }
 

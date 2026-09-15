@@ -4,7 +4,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Shield, ShieldOff, UserCog, Star, Loader2, Search, X } from 'lucide-react'
+import { Shield, ShieldOff, UserCog, Star, Loader2, Search, X, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
@@ -129,6 +129,28 @@ export function AdminUserManager({ showOnlyUsers, showOnlyAdmins }: Props) {
       setUpdating(null)
     }
   }, [users, fetchUsers, router])
+
+  const deleteUser = useCallback(async (user: StoredUser) => {
+    if (user.role === 'master_admin') return
+    const confirmed = window.confirm(
+      `Permanently delete ${user.email}? This removes their profile, sessions, cart, purchases, and account data. They must register again to return.`,
+    )
+    if (!confirmed) return
+
+    setUpdating(user.id)
+    setError('')
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete user')
+      await fetchUsers()
+      router.refresh()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete user')
+    } finally {
+      setUpdating(null)
+    }
+  }, [fetchUsers, router])
 
   if (loading) {
     return (
@@ -293,6 +315,18 @@ export function AdminUserManager({ showOnlyUsers, showOnlyAdmins }: Props) {
                     <UserCog className="size-3.5" />
                   )}
                   {user.isAdmin ? 'Remove' : 'Make Admin'}
+                </Button>
+              )}
+              {user.role !== 'master_admin' && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => deleteUser(user)}
+                  disabled={updating === user.id}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
                 </Button>
               )}
             </div>

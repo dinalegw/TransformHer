@@ -18,10 +18,6 @@ const OPTIONAL_VARS = [
   'BLOB_READ_WRITE_TOKEN',
 ]
 
-const ALTERNATE_REQUIRED_VARS = [
-  ['COURIER_API_KEY', 'RENDERED_API_KEY'],
-]
-
 export async function GET() {
   const checks: Record<string, { set: boolean; note?: string }> = {}
 
@@ -33,10 +29,9 @@ export async function GET() {
     }
   }
 
-  for (const [primary, fallback] of ALTERNATE_REQUIRED_VARS) {
-    const set = !!process.env[primary] || !!process.env[fallback]
-    checks[primary] = { set, note: set ? undefined : 'MISSING — set COURIER_API_KEY or RENDERED_API_KEY' }
-    checks[fallback] = { set: !!process.env[fallback], note: process.env[fallback] ? undefined : 'optional fallback' }
+  checks.COURIER_API_KEY = {
+    set: !!process.env.COURIER_API_KEY,
+    note: process.env.COURIER_API_KEY ? undefined : 'MISSING — set COURIER_API_KEY',
   }
 
   for (const key of OPTIONAL_VARS) {
@@ -59,5 +54,5 @@ export async function GET() {
 
 function requiredEnvCheck(): boolean {
   return REQUIRED_VARS.every(k => process.env[k])
-    && ALTERNATE_REQUIRED_VARS.every(([primary, fallback]) => !!process.env[primary] || !!process.env[fallback])
+    && !!process.env.COURIER_API_KEY
 }

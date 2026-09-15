@@ -19,7 +19,9 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { bookSlug } = await req.json()
-  if (!bookSlug) return NextResponse.json({ error: 'bookSlug is required' }, { status: 400 })
+  if (typeof bookSlug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(bookSlug)) {
+    return NextResponse.json({ error: 'A valid bookSlug is required' }, { status: 400 })
+  }
 
   const book = await getBookBySlug(bookSlug)
   if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
@@ -33,10 +35,15 @@ export async function POST(req: Request) {
   const result = await initializePaystackPayment({
     email: user.email,
     amount: Number(book.price),
+    currency: book.currency,
     reference,
     metadata: { userId: user.id, bookSlug, bookTitle: book.title },
     callback_url: `${getBaseUrl()}/books/${bookSlug}?purchased=true`,
   })
 
-  return NextResponse.json(result)
+  if (!result.status || !result.data?.authorization_url || !result.data.reference) {
+    return NextResponse.json({ error: result.message ?? 'Payment initialization failed' }, { status: 502 })
+  }
+
+  return NextResponse.json({ authorization_url: result.data.authorization_url, reference: result.data.reference })
 }

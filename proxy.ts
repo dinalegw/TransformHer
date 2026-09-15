@@ -29,7 +29,12 @@ function verifyToken(token: string): Record<string, unknown> | null {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/icon') || pathname.startsWith('/apple-icon') || pathname.startsWith('/uploads') || pathname.startsWith('/books/') || pathname === '/hero-reading.png') {
+  // Ebook content must only be served through the ownership-checked reader route.
+  if (pathname.startsWith('/uploads/')) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  if (pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/icon') || pathname.startsWith('/apple-icon') || pathname.startsWith('/books/') || pathname === '/hero-reading.png') {
     return NextResponse.next()
   }
 

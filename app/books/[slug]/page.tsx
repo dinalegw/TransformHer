@@ -9,13 +9,12 @@ import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { BookCard } from '@/components/book-card'
 import { PaystackButton } from '@/components/paystack-button'
+import { PurchaseConfirmation } from '@/components/purchase-confirmation'
 import { AddToCartButton } from '@/components/add-to-cart-button'
 import { getBookBySlug, getRelatedBooks } from '@/lib/books'
 import { formatPrice } from '@/lib/format'
 import { getCurrentUser } from '@/lib/auth'
-import { verifyPaystackPayment } from '@/lib/paystack'
-import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
-import { getCartItem, getLibraryItem, recordPurchase, fetchLibrary } from '@/lib/library'
+import { getCartItem, getLibraryItem, fetchLibrary } from '@/lib/library'
 
 export async function generateMetadata({
   params,
@@ -48,52 +47,6 @@ export default async function BookDetailPage({
   const ownedItem = user ? await getLibraryItem(user.id, book.id, isMasterAdmin) : null
   const isOwned = !!ownedItem
   const inCart = user ? !!(await getCartItem(user.id, book.id)) : false
-  let alreadyOwned = false
-
-  if (purchased === 'true') {
-    const ref = reference ?? trxref
-    if (ref) {
-      try {
-        const result = await verifyPaystackPayment(ref)
-        if (result.status && result.data?.status === 'success' && result.data?.metadata) {
-          const { userId: purchaseUserId, bookTitle } = result.data.metadata
-          const customerEmail = result.data.customer?.email ?? ''
-          const amount = formatPrice(Number(result.data.amount) / 100, result.data.currency ?? 'NGN')
-          const customerName = result.data.customer?.first_name
-            ? `${result.data.customer.first_name} ${result.data.customer.last_name ?? ''}`.trim()
-            : 'Valued Customer'
-
-          const purchaserId = purchaseUserId as string | undefined
-          if (purchaserId && user) {
-            const existing = await getLibraryItem(purchaserId, book.id)
-            if (!existing) {
-              await recordPurchase(purchaserId, book.id, book.slug, ref)
-            } else {
-              alreadyOwned = true
-            }
-          }
-
-          if (customerEmail) {
-            await sendPurchaseConfirmation(customerEmail, customerName, bookTitle ?? book.title, amount)
-          }
-
-          const adminEmail = process.env.ADMIN_EMAIL
-          if (adminEmail && customerEmail) {
-            await sendAdminOrderNotification(
-              adminEmail,
-              customerEmail,
-              customerName,
-              bookTitle ?? book.title,
-              amount,
-            )
-          }
-        }
-      } catch (err) {
-        console.error('Payment verification failed:', err)
-      }
-    }
-  }
-
   const related = await getRelatedBooks(book.category, book.slug, 4)
   const ownedIds = user ? new Set((await fetchLibrary(user.id)).map(i => i.bookId)) : new Set<number>()
 
@@ -109,13 +62,7 @@ export default async function BookDetailPage({
             </Link>
           </Button>
 
-          {purchased === 'true' && (
-            <div className="mb-8 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-800">
-              {alreadyOwned
-                ? <><strong>{book.title}</strong> is already in your library.</>
-                : <>Thank you for your purchase! <strong>{book.title}</strong> will be unlocked in your library within 72 hours. You&apos;ll receive an email once it&apos;s ready.</>}
-            </div>
-          )}
+          {purchased === 'true' && <PurchaseConfirmation bookSlug={book.slug} reference={reference ?? trxref} />}
 
           <div className="grid gap-10 md:grid-cols-[minmax(0,340px)_1fr] md:gap-14">
             <div className="mx-auto w-full max-w-xs md:mx-0">

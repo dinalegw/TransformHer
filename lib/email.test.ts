@@ -44,16 +44,16 @@ describe('lib/email', () => {
     })
   })
 
-  it('uses a Render API key fallback when Courier key is absent', async () => {
+  it('requires a Courier API key instead of silently using another provider key', async () => {
     const email = await loadEmailModule({
       COURIER_API_KEY: undefined,
       COURIER_TEMPLATE_PASSWORD_RESET: 'test-reset',
       RENDERED_API_KEY: 'render-test-key',
     })
 
-    await email.sendPasswordResetEmail('user@example.com', 'https://example.com/reset')
-
-    expect(mockCourierConstructor).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'render-test-key' }))
+    await expect(email.sendPasswordResetEmail('user@example.com', 'https://example.com/reset')).rejects
+      .toThrow(email.CourierEmailError)
+    expect(mockCourierConstructor).not.toHaveBeenCalled()
   })
 
   it('throws CourierEmailError when Courier fails', async () => {

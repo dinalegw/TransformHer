@@ -1,0 +1,48 @@
+import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+import { getBookBySlug } from '@/lib/books'
+import { getLibraryItem, recordPurchase } from '@/lib/library'
+import { verifyPaystackPayment } from '@/lib/paystack'
+
+function isReference(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{8,160}$/.test(value)
+}
+
+export async function POST(req: Request) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const { reference, bookSlug } = await req.json()
+    if (!isReference(reference) || typeof bookSlug !== 'string') {
+      return NextResponse.json({ error: 'A valid payment reference and book slug are required' }, { status: 400 })
+    }
+
+    const book = await getBookBySlug(bookSlug)
+    if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+
+    const result = await verifyPaystackPayment(reference)
+    const payment = result.data
+    const metadata = payment?.metadata
+    if (!result.status || payment?.status !== 'success' || !metadata) {
+      return NextResponse.json({ error: 'Payment verification failed' }, { status: 402 })
+    }
+    if (metadata.cartCheckout || metadata.userId !== user.id || metadata.bookSlug !== book.slug) {
+      return NextResponse.json({ error: 'Payment does not match this purchase' }, { status: 403 })
+    }
+    if (payment.customer?.email?.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
+      return NextResponse.json({ error: 'Payment email does not match this account' }, { status: 403 })
+    }
+    if (payment.currency !== book.currency || Number(payment.amount) !== Math.round(Number(book.price) * 100)) {
+      return NextResponse.json({ error: 'Payment amount mismatch' }, { status: 402 })
+    }
+
+    const existing = await getLibraryItem(user.id, book.id)
+    if (!existing) await recordPurchase(user.id, book.id, book.slug, payment.reference)
+
+    return NextResponse.json({ success: true, alreadyRecorded: Boolean(existing) })
+  } catch (error) {
+    console.error('[paystack] single-book confirmation failed', { error })
+    return NextResponse.json({ error: 'Unable to confirm payment. Please contact support with your reference.' }, { status: 500 })
+  }
+}

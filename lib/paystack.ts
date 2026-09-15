@@ -59,6 +59,7 @@ export async function initializePaystackPayment(params: {
   email: string
   amount: number
   reference: string
+  currency?: 'NGN' | 'USD' | 'GBP' | 'EUR'
   callback_url?: string
   metadata?: Record<string, unknown>
 }): Promise<PaystackInitializeResponse> {
@@ -74,7 +75,7 @@ export async function initializePaystackPayment(params: {
       amount: Math.round(params.amount * 100),
       reference: params.reference,
       metadata: params.metadata,
-      currency: 'NGN',
+      currency: params.currency ?? 'NGN',
       callback_url: params.callback_url ?? `${getBaseUrl()}/books?purchased=true`,
     }),
   })

@@ -11,9 +11,9 @@ let client: Courier | null = null
 
 function getClient(): Courier {
   if (!client) {
-    const apiKey = process.env.COURIER_API_KEY || process.env.RENDERED_API_KEY
+    const apiKey = process.env.COURIER_API_KEY
     if (!apiKey) {
-      throw new CourierEmailError('[courier] COURIER_API_KEY or RENDERED_API_KEY is not configured')
+      throw new CourierEmailError('[courier] COURIER_API_KEY is not configured')
     }
     client = new Courier({
       apiKey,
@@ -52,7 +52,8 @@ async function sendMessage(
         routing: { method: 'single', channels: ['email'] },
       },
     })
-    console.info(`[courier] sent:${label}`, { requestId: res.requestId })
+    // Courier acceptance is not delivery. Use this ID in Courier's event timeline.
+    console.info(`[courier] accepted:${label}`, { requestId: res.requestId })
   } catch (error) {
     console.error(`[courier] send_failed:${label}`, {
       to,
