@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getDb } from '@/lib/db/connection'
 
 const REQUIRED_VARS = [
   'AUTH_SECRET',
@@ -43,6 +44,13 @@ export async function GET() {
   }
 
   checks['VERCEL_URL'] = { set: !!process.env.VERCEL_URL }
+
+  // This reports connectivity only—never database credentials or data.
+  const db = await getDb()
+  checks.DATABASE = {
+    set: !!db,
+    note: db ? undefined : 'unavailable — add a Postgres connection URL and run migrations',
+  }
 
   const allSet = requiredEnvCheck()
 
