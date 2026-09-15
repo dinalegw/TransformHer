@@ -2,7 +2,7 @@ import type { MetadataRoute } from 'next'
 import { getAllBooks } from '@/lib/books'
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://transformher.com'
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://transformher.vercel.app'
 
   const staticRoutes = [
     { url: baseUrl, lastModified: new Date(), changeFrequency: 'monthly' as const, priority: 1 },
