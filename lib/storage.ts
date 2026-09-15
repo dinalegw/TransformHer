@@ -9,6 +9,7 @@ import { put, del, get } from '@vercel/blob'
 
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
 const USE_BLOB = !!BLOB_TOKEN
+const IS_VERCEL = !!process.env.VERCEL
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads', 'books')
 
 /* ------------------------------------------------------------------ */
@@ -110,6 +111,10 @@ export async function saveBookFile(bookSlug: string, fileName: string, buffer: B
     })
 
     return blob.url
+  }
+
+  if (IS_VERCEL) {
+    throw new Error('Production uploads require configured object storage. Set BLOB_READ_WRITE_TOKEN or use a private storage provider.')
   }
 
   return localSave(bookSlug, fileName, buffer)
