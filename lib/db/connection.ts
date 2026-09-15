@@ -11,11 +11,40 @@ let _connectAttempts = 0
 const MAX_RETRIES = 2
 
 async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>) {
-  await db.execute(sql.raw(`DO $$ BEGIN CREATE TYPE "user_role" AS ENUM ('user', 'admin', 'master_admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`))
-  await db.execute(sql.raw(`DO $$ BEGIN CREATE TYPE "admin_rank" AS ENUM ('junior', 'senior', 'lead', 'master'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`))
-  await db.execute(sql.raw(`DO $$ BEGIN CREATE TYPE "book_source" AS ENUM ('seed', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`))
-  await db.execute(sql`ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "role" "user_role" NOT NULL DEFAULT 'user', ADD COLUMN IF NOT EXISTS "rank" "admin_rank", ADD COLUMN IF NOT EXISTS "title" text, ADD COLUMN IF NOT EXISTS "permissions" text NOT NULL DEFAULT '[]', ADD COLUMN IF NOT EXISTS "token_version" integer NOT NULL DEFAULT 0;`)
-  await db.execute(sql`ALTER TABLE "books" ADD COLUMN IF NOT EXISTS "file_url" text, ADD COLUMN IF NOT EXISTS "source" "book_source" NOT NULL DEFAULT 'seed', ADD COLUMN IF NOT EXISTS "archived" boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS "updated_at" timestamp NOT NULL DEFAULT now();`)
+  // Older TransformHer databases predate these fields. The statements are
+  // additive and idempotent, so a deployed app can safely recover a legacy
+  // schema without losing user or catalogue data.
+  await db.execute(sql.raw('DO $$ BEGIN CREATE TYPE "user_role" AS ENUM (\'user\', \'admin\', \'master_admin\'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;'))
+  await db.execute(sql.raw('DO $$ BEGIN CREATE TYPE "admin_rank" AS ENUM (\'junior\', \'senior\', \'lead\', \'master\'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;'))
+  await db.execute(sql.raw('DO $$ BEGIN CREATE TYPE "book_source" AS ENUM (\'seed\', \'admin\'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;'))
+
+  await db.execute(sql.raw(`
+    ALTER TABLE "user"
+      ADD COLUMN IF NOT EXISTS "image" text,
+      ADD COLUMN IF NOT EXISTS "username" text,
+      ADD COLUMN IF NOT EXISTS "phone" text,
+      ADD COLUMN IF NOT EXISTS "show_full_name" boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "role" "user_role" NOT NULL DEFAULT 'user',
+      ADD COLUMN IF NOT EXISTS "rank" "admin_rank",
+      ADD COLUMN IF NOT EXISTS "title" text,
+      ADD COLUMN IF NOT EXISTS "permissions" text NOT NULL DEFAULT '[]',
+      ADD COLUMN IF NOT EXISTS "token_version" integer NOT NULL DEFAULT 0;
+  `))
+  await db.execute(sql.raw(`
+    ALTER TABLE "books"
+      ADD COLUMN IF NOT EXISTS "file_url" text,
+      ADD COLUMN IF NOT EXISTS "tagline" text NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS "description" text NOT NULL DEFAULT '',
+      ADD COLUMN IF NOT EXISTS "rating" numeric(2, 1) NOT NULL DEFAULT '5.0',
+      ADD COLUMN IF NOT EXISTS "reviews_count" integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "pages" integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "featured" boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "bestseller" boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "source" "book_source" NOT NULL DEFAULT 'seed',
+      ADD COLUMN IF NOT EXISTS "archived" boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS "updated_at" timestamp NOT NULL DEFAULT now();
+  `))
 }
 
 function getConnectionUrl(): string | null {
