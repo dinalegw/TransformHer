@@ -15,8 +15,11 @@ export function getDisplayName(user: {
 }
 
 export function getBaseUrl(): string {
+  const configuredUrl = process.env.NEXT_PUBLIC_BASE_URL
+  if (configuredUrl) return configuredUrl.replace(/\/$/, '')
+
   const vercelUrl = process.env.VERCEL_URL
   if (vercelUrl) return `https://${vercelUrl}`
   if (process.env.NODE_ENV === 'development') return 'http://localhost:3000'
-  return process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000'
+  return 'https://transformher.vercel.app'
 }
