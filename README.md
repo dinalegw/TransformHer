@@ -116,6 +116,10 @@ npm run build
 4. Test Courier delivery—not merely enqueueing—from the correct Courier environment.
 5. Verify non-admin, admin, and master-admin access paths.
 
+## Engineering master prompt
+
+Use [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) for hardening, provider setup, verification, and handoff requirements.
+
 ## License
 
 MIT.
