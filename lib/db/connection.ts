@@ -44,7 +44,10 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
 
   await db.execute(sql.raw(`
     ALTER TABLE "user"
+      ADD COLUMN IF NOT EXISTS "email_verified" boolean NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "image" text,
+      ADD COLUMN IF NOT EXISTS "password_hash" text,
+      ADD COLUMN IF NOT EXISTS "is_admin" boolean NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "username" text,
       ADD COLUMN IF NOT EXISTS "phone" text,
       ADD COLUMN IF NOT EXISTS "show_full_name" boolean NOT NULL DEFAULT false,
@@ -52,8 +55,14 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
       ADD COLUMN IF NOT EXISTS "rank" "admin_rank",
       ADD COLUMN IF NOT EXISTS "title" text,
       ADD COLUMN IF NOT EXISTS "permissions" text NOT NULL DEFAULT '[]',
-      ADD COLUMN IF NOT EXISTS "token_version" integer NOT NULL DEFAULT 0;
+      ADD COLUMN IF NOT EXISTS "token_version" integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "created_at" timestamp NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS "updated_at" timestamp NOT NULL DEFAULT now();
   `))
+  await db.execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS "user_email_idx" ON "user" ("email");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "user_role_idx" ON "user" ("role");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "user_token_version_idx" ON "user" ("token_version");`))
+
   await db.execute(sql.raw(`
     ALTER TABLE "books"
       ADD COLUMN IF NOT EXISTS "file_url" text,
@@ -83,13 +92,11 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
       "archived" boolean NOT NULL DEFAULT false
     );
   `))
-  await db.execute(sql.raw(`
-    CREATE INDEX IF NOT EXISTS "purchases_user_idx" ON "user_purchases" ("user_id");
-    CREATE INDEX IF NOT EXISTS "purchases_book_idx" ON "user_purchases" ("book_id");
-    CREATE INDEX IF NOT EXISTS "purchases_slug_idx" ON "user_purchases" ("book_slug");
-    CREATE UNIQUE INDEX IF NOT EXISTS "purchases_user_book_idx" ON "user_purchases" ("user_id", "book_id");
-    CREATE INDEX IF NOT EXISTS "purchases_release_idx" ON "user_purchases" ("released", "release_at");
-  `))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "purchases_user_idx" ON "user_purchases" ("user_id");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "purchases_book_idx" ON "user_purchases" ("book_id");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "purchases_slug_idx" ON "user_purchases" ("book_slug");`))
+  await db.execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS "purchases_user_book_idx" ON "user_purchases" ("user_id", "book_id");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "purchases_release_idx" ON "user_purchases" ("released", "release_at");`))
 
   await db.execute(sql.raw(`
     CREATE TABLE IF NOT EXISTS "cart" (
@@ -99,11 +106,9 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
       "added_at" timestamp NOT NULL DEFAULT now()
     );
   `))
-  await db.execute(sql.raw(`
-    CREATE INDEX IF NOT EXISTS "cart_user_idx" ON "cart" ("user_id");
-    CREATE INDEX IF NOT EXISTS "cart_book_idx" ON "cart" ("book_id");
-    CREATE UNIQUE INDEX IF NOT EXISTS "cart_user_book_idx" ON "cart" ("user_id", "book_id");
-  `))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "cart_user_idx" ON "cart" ("user_id");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "cart_book_idx" ON "cart" ("book_id");`))
+  await db.execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS "cart_user_book_idx" ON "cart" ("user_id", "book_id");`))
 }
 
 function getConnectionUrl(): string | null {
