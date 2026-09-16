@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import { eq } from 'drizzle-orm'
 import {
   requireMasterAdmin,
   getUserById,
   setUserAdmin,
-  deleteUserAndData,
 } from '@/lib/auth'
+import { getDb } from '@/lib/db/connection'
+import { pendingChanges, user as userTable, verification } from '@/lib/db/schema'
 import { getDefaultPermissions, ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
 
 export async function PUT(
@@ -66,8 +68,8 @@ export async function PUT(
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[admin/users] Failed to update user')
+    return NextResponse.json({ error: 'Unable to update this user right now.' }, { status: 500 })
   }
 }
 
@@ -92,13 +94,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cannot remove master admin' }, { status: 400 })
     }
 
-    await deleteUserAndData(user.id, user.email)
+    const db = await getDb()
+    if (!db) {
+      return NextResponse.json({ error: 'Database is temporarily unavailable.' }, { status: 503 })
+    }
+
+    // The application uses signed cookie sessions, so deleting a user row is
+    // enough to invalidate their current session. Child rows created by the
+    // current schema (session, account, cart and purchases) cascade from user.
+    // Avoid explicitly querying optional legacy tables: older production
+    // databases may not contain them, which previously made deletion fail.
+    await db.transaction(async (tx) => {
+      await tx.delete(verification).where(eq(verification.identifier, user.email.trim().toLowerCase()))
+      await tx.delete(pendingChanges).where(eq(pendingChanges.submittedBy, user.id))
+      await tx.delete(userTable).where(eq(userTable.id, user.id))
+    })
+
     return NextResponse.json({ success: true, message: 'User account and associated data were permanently deleted.' })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[admin/users] Failed to delete user')
+    return NextResponse.json({ error: 'Unable to delete this user right now.' }, { status: 500 })
   }
 }
