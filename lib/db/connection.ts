@@ -14,33 +14,13 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
   // Older TransformHer databases predate parts of the current application
   // schema. These statements are additive and idempotent so production can
   // recover without deleting or rewriting existing catalogue/user data.
-  await db.execute(sql.raw(`
-    DO $$
-    BEGIN
-      CREATE TYPE "user_role" AS ENUM ('user', 'admin', 'master_admin');
-    EXCEPTION
-      WHEN duplicate_object THEN NULL;
-    END
-    $$;
-  `))
-  await db.execute(sql.raw(`
-    DO $$
-    BEGIN
-      CREATE TYPE "admin_rank" AS ENUM ('junior', 'senior', 'lead', 'master');
-    EXCEPTION
-      WHEN duplicate_object THEN NULL;
-    END
-    $$;
-  `))
-  await db.execute(sql.raw(`
-    DO $$
-    BEGIN
-      CREATE TYPE "book_source" AS ENUM ('seed', 'admin');
-    EXCEPTION
-      WHEN duplicate_object THEN NULL;
-    END
-    $$;
-  `))
+  for (const statement of [
+    `DO $$ BEGIN CREATE TYPE "user_role" AS ENUM ('user', 'admin', 'master_admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+    `DO $$ BEGIN CREATE TYPE "admin_rank" AS ENUM ('junior', 'senior', 'lead', 'master'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+    `DO $$ BEGIN CREATE TYPE "book_source" AS ENUM ('seed', 'admin'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+    `DO $$ BEGIN CREATE TYPE "change_status" AS ENUM ('pending', 'approved', 'rejected'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+    `DO $$ BEGIN CREATE TYPE "change_type" AS ENUM ('create', 'update', 'delete', 'archive'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+  ]) await db.execute(sql.raw(statement))
 
   await db.execute(sql.raw(`
     ALTER TABLE "user"
@@ -109,6 +89,26 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
   await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "cart_user_idx" ON "cart" ("user_id");`))
   await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "cart_book_idx" ON "cart" ("book_id");`))
   await db.execute(sql.raw(`CREATE UNIQUE INDEX IF NOT EXISTS "cart_user_book_idx" ON "cart" ("user_id", "book_id");`))
+
+  // Admin notifications and moderation depend on this table. Legacy databases
+  // may not have it even though the current Drizzle schema does.
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS "pending_changes" (
+      "id" text PRIMARY KEY,
+      "book_slug" text NOT NULL,
+      "book_title" text NOT NULL,
+      "type" "change_type" NOT NULL,
+      "changes" text NOT NULL DEFAULT '{}',
+      "submitted_by" text NOT NULL,
+      "submitted_by_email" text NOT NULL,
+      "submitted_at" timestamp NOT NULL DEFAULT now(),
+      "status" "change_status" NOT NULL DEFAULT 'pending',
+      "reviewed_by" text,
+      "reviewed_at" timestamp
+    );
+  `))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "pending_changes_status_idx" ON "pending_changes" ("status");`))
+  await db.execute(sql.raw(`CREATE INDEX IF NOT EXISTS "pending_changes_slug_idx" ON "pending_changes" ("book_slug");`))
 }
 
 function getConnectionUrl(): string | null {
@@ -122,21 +122,13 @@ function getConnectionUrl(): string | null {
 function getPoolConfig(): PoolConfig {
   const url = getConnectionUrl()
   if (!url) return { connectionString: '', max: 0 }
-
-  return {
-    connectionString: url,
-    max: 1,
-    idleTimeoutMillis: 3000,
-    connectionTimeoutMillis: 3000,
-  }
+  return { connectionString: url, max: 1, idleTimeoutMillis: 3000, connectionTimeoutMillis: 3000 }
 }
 
 async function tryConnect(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
   const url = getConnectionUrl()
   if (!url) return null
-
   const pool = new Pool(getPoolConfig())
-
   try {
     const client = await pool.connect()
     client.release()
@@ -152,17 +144,14 @@ async function tryConnect(): Promise<ReturnType<typeof drizzle<typeof schema>> |
 export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>> | null> {
   if (_pg) return _pg
   if (_connecting) return null
-
   _connecting = true
   _connectAttempts++
-
   try {
     const pg = await tryConnect()
     if (pg) {
       await ensureLegacySchema(pg)
       _pg = pg
       _connectAttempts = 0
-
       if (!_pgSeeded) {
         _pgSeeded = true
         const { seedDbAdmin } = await import('@/lib/auth')
@@ -170,14 +159,9 @@ export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>>
         const { seedInitialBooks } = await import('@/lib/db/seed')
         await seedInitialBooks().catch(() => {})
       }
-
       return _pg
     }
-
-    if (_connectAttempts >= MAX_RETRIES) {
-      _connectAttempts = 0
-    }
-
+    if (_connectAttempts >= MAX_RETRIES) _connectAttempts = 0
     return null
   } finally {
     _connecting = false
@@ -186,11 +170,7 @@ export async function getDb(): Promise<ReturnType<typeof drizzle<typeof schema>>
 
 export async function closeDb() {
   if (_pgPool) {
-    try {
-      await _pgPool.end()
-    } catch {
-      // ignore close errors
-    }
+    try { await _pgPool.end() } catch { /* ignore close errors */ }
     _pgPool = null
     _pg = null
   }
