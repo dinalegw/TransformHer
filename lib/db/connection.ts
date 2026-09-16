@@ -11,12 +11,36 @@ let _connectAttempts = 0
 const MAX_RETRIES = 2
 
 async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>) {
-  // Older TransformHer databases predate these fields. The statements are
-  // additive and idempotent, so a deployed app can safely recover a legacy
-  // schema without losing user or catalogue data.
-  await db.execute(sql.raw('DO $$ BEGIN CREATE TYPE "user_role" AS ENUM (\'user\', \'admin\', \'master_admin\'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;'))
-  await db.execute(sql.raw('DO $$ BEGIN CREATE TYPE "admin_rank" AS ENUM (\'junior\', \'senior\', \'lead\', \'master\'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;'))
-  await db.execute(sql.raw('DO $$ BEGIN CREATE TYPE "book_source" AS ENUM (\'seed\', \'admin\'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;'))
+  // Older TransformHer databases predate parts of the current application
+  // schema. These statements are additive and idempotent so production can
+  // recover without deleting or rewriting existing catalogue/user data.
+  await db.execute(sql.raw(`
+    DO $$
+    BEGIN
+      CREATE TYPE "user_role" AS ENUM ('user', 'admin', 'master_admin');
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END
+    $$;
+  `))
+  await db.execute(sql.raw(`
+    DO $$
+    BEGIN
+      CREATE TYPE "admin_rank" AS ENUM ('junior', 'senior', 'lead', 'master');
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END
+    $$;
+  `))
+  await db.execute(sql.raw(`
+    DO $$
+    BEGIN
+      CREATE TYPE "book_source" AS ENUM ('seed', 'admin');
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END
+    $$;
+  `))
 
   await db.execute(sql.raw(`
     ALTER TABLE "user"
@@ -44,6 +68,41 @@ async function ensureLegacySchema(db: ReturnType<typeof drizzle<typeof schema>>)
       ADD COLUMN IF NOT EXISTS "archived" boolean NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "deleted" boolean NOT NULL DEFAULT false,
       ADD COLUMN IF NOT EXISTS "updated_at" timestamp NOT NULL DEFAULT now();
+  `))
+
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS "user_purchases" (
+      "id" serial PRIMARY KEY,
+      "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+      "book_id" integer NOT NULL REFERENCES "books"("id") ON DELETE cascade,
+      "book_slug" text NOT NULL,
+      "purchase_date" timestamp NOT NULL DEFAULT now(),
+      "payment_reference" text,
+      "released" boolean NOT NULL DEFAULT false,
+      "release_at" timestamp,
+      "archived" boolean NOT NULL DEFAULT false
+    );
+  `))
+  await db.execute(sql.raw(`
+    CREATE INDEX IF NOT EXISTS "purchases_user_idx" ON "user_purchases" ("user_id");
+    CREATE INDEX IF NOT EXISTS "purchases_book_idx" ON "user_purchases" ("book_id");
+    CREATE INDEX IF NOT EXISTS "purchases_slug_idx" ON "user_purchases" ("book_slug");
+    CREATE UNIQUE INDEX IF NOT EXISTS "purchases_user_book_idx" ON "user_purchases" ("user_id", "book_id");
+    CREATE INDEX IF NOT EXISTS "purchases_release_idx" ON "user_purchases" ("released", "release_at");
+  `))
+
+  await db.execute(sql.raw(`
+    CREATE TABLE IF NOT EXISTS "cart" (
+      "id" serial PRIMARY KEY,
+      "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
+      "book_id" integer NOT NULL REFERENCES "books"("id") ON DELETE cascade,
+      "added_at" timestamp NOT NULL DEFAULT now()
+    );
+  `))
+  await db.execute(sql.raw(`
+    CREATE INDEX IF NOT EXISTS "cart_user_idx" ON "cart" ("user_id");
+    CREATE INDEX IF NOT EXISTS "cart_book_idx" ON "cart" ("book_id");
+    CREATE UNIQUE INDEX IF NOT EXISTS "cart_user_book_idx" ON "cart" ("user_id", "book_id");
   `))
 }
 
