@@ -49,10 +49,12 @@ export function PaystackButton({
         body: JSON.stringify({ bookSlug }),
       })
       const data = await res.json()
-      if (data.status && data.data?.authorization_url) {
-        window.location.href = data.data.authorization_url
+
+      if (res.ok && typeof data.authorization_url === 'string' && data.authorization_url) {
+        window.location.assign(data.authorization_url)
         return
       }
+
       setError(data.error || data.message || 'Payment initialization failed')
     } catch {
       setError('Network error. Please try again.')
