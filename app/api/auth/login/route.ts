@@ -85,7 +85,8 @@ export async function POST(req: Request) {
     const body = await readBody(req)
     htmlForm = body.htmlForm
     redirectTo = safeRedirect(body.redirect)
-    const { email, password } = body
+    const email = typeof body.email === 'string' ? body.email : ''
+    const password = typeof body.password === 'string' ? body.password : ''
 
     const emailError = validateEmail(email)
     if (emailError) {
