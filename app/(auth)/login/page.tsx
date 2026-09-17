@@ -1,7 +1,8 @@
 import Link from 'next/link'
-import { LogIn } from 'lucide-react'
+import { LogIn, Mail } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
 type LoginPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>
@@ -19,6 +20,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams
   const redirectTo = safeRedirect(first(params.redirect) || '/books')
   const error = first(params.error)
+  const showSupport = first(params.support) === '1'
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -34,9 +36,18 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <form action="/api/auth/login" method="post" className="mt-8 space-y-5">
             <input type="hidden" name="redirect" value={redirectTo} />
             {error && (
-              <p role="alert" className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
-                {error}
-              </p>
+              <div role="alert" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <p>{error}</p>
+                {showSupport && (
+                  <a
+                    href={`mailto:${SUPPORT_EMAIL}?subject=TransformHer%20Account%20Support`}
+                    className="mt-3 inline-flex items-center gap-1.5 font-medium underline underline-offset-4"
+                  >
+                    <Mail className="size-4" />
+                    Email {SUPPORT_EMAIL}
+                  </a>
+                )}
+              </div>
             )}
 
             <div>
