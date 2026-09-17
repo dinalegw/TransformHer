@@ -3,6 +3,11 @@ import { randomUUID } from 'crypto'
 import { and, desc, eq, lte, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { deletedUserArchives } from '@/lib/db/schema'
+import {
+  deletedUserAccessEvents,
+  ensureAccessHistorySchema,
+  getDeletedUserAccessHistory,
+} from '@/lib/access-history'
 
 export interface ComplianceActor {
   id: string
@@ -51,6 +56,8 @@ export async function recordArchiveAudit(
  */
 export async function purgeExpiredDeletedUserArchives() {
   const db = await ensureComplianceAuditTable()
+  await ensureAccessHistorySchema()
+
   const expired = await db.delete(deletedUserArchives)
     .where(and(
       lte(deletedUserArchives.retentionExpiresAt, new Date()),
@@ -60,6 +67,7 @@ export async function purgeExpiredDeletedUserArchives() {
 
   if (expired.length > 0) {
     for (const row of expired) {
+      await db.delete(deletedUserAccessEvents).where(eq(deletedUserAccessEvents.archiveId, row.id))
       await recordArchiveAudit(
         { id: 'system', email: 'system@transformher.local' },
         'retention_purge',
@@ -108,7 +116,9 @@ export async function getDeletedArchiveForCompliance(
     purchases = []
   }
 
-  return { ...archive, purchaseSnapshot: purchases }
+  const accessHistory = await getDeletedUserAccessHistory(archiveId)
+
+  return { ...archive, purchaseSnapshot: purchases, accessHistory }
 }
 
 export async function setDeletedArchiveLegalHold(
