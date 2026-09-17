@@ -31,17 +31,19 @@ function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ email: trimmedEmail, password }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error || 'Login failed')
       } else {
-        router.push(redirectTo)
+        window.dispatchEvent(new Event('auth-changed'))
+        router.replace(redirectTo)
         router.refresh()
       }
     } catch {
-      setError('Something went wrong')
+      setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -55,26 +57,21 @@ function LoginForm() {
           <div className="text-center">
             <LogIn className="mx-auto size-8 text-primary" />
             <h1 className="mt-4 font-heading text-3xl text-foreground">Welcome back</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Sign in to your account
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
-                {error}
-              </p>
+              <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>
             )}
 
             <div>
-              <label htmlFor="email" className="text-sm font-medium text-foreground">
-                Email
-              </label>
+              <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
               <input
                 id="email"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -83,14 +80,13 @@ function LoginForm() {
             </div>
 
             <div>
-              <label htmlFor="password" className="text-sm font-medium text-foreground">
-                Password
-              </label>
+              <label htmlFor="password" className="text-sm font-medium text-foreground">Password</label>
               <div className="relative mt-1">
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-9 w-full rounded-lg border border-input bg-transparent px-3 pr-10 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -106,10 +102,7 @@ function LoginForm() {
                 </button>
               </div>
               <div className="flex justify-end">
-                <Link
-                  href="/forgot-password"
-                  className="text-sm font-medium text-primary hover:underline"
-                >
+                <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
                   Forgot password?
                 </Link>
               </div>
@@ -122,9 +115,7 @@ function LoginForm() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Don&apos;t have an account?{' '}
-            <Link href="/signup" className="font-medium text-primary hover:underline">
-              Sign up
-            </Link>
+            <Link href="/signup" className="font-medium text-primary hover:underline">Sign up</Link>
           </p>
         </div>
       </main>
