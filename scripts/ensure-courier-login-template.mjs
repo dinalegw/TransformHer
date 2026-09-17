@@ -9,6 +9,7 @@ if (!isVercel || !apiKey) {
 const API_BASE = 'https://api.courier.com'
 const TEMPLATE_NAME = 'TransformHer Login Notification'
 const ROUTING_NAME = 'TransformHer Email'
+const VERIFICATION_REQUEST_ID = '1-6aabc7fe-d6c9fdd871e8df26b0bfd991'
 
 const headers = {
   Authorization: `Bearer ${apiKey}`,
@@ -180,22 +181,18 @@ async function sendOneTimeVerification(id, created) {
   const requestId = result?.requestId
   if (!requestId) throw new Error('Courier verification send returned no requestId')
   console.log(`[courier-bootstrap] verification send accepted requestId=${requestId}`)
+}
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    try {
-      const message = await courier(`/messages/${encodeURIComponent(requestId)}`)
-      const status = message?.status || message?.message?.status || 'UNKNOWN'
-      console.log(`[courier-bootstrap] verification status=${status} requestId=${requestId}`)
-      if (['DELIVERED', 'SENT'].includes(status)) return
-      if (['UNROUTABLE', 'UNDELIVERABLE', 'FAILED'].includes(status)) {
-        throw new Error(`Courier verification failed with status ${status}`)
-      }
-    } catch (error) {
-      if (attempt === 4) {
-        console.warn(`[courier-bootstrap] status check incomplete: ${error instanceof Error ? error.message : error}`)
-      }
+async function verifyPreviousDelivery() {
+  try {
+    const message = await courier(`/messages/${encodeURIComponent(VERIFICATION_REQUEST_ID)}`)
+    const status = message?.status || message?.message?.status || 'UNKNOWN'
+    console.log(`[courier-bootstrap] previous verification status=${status} requestId=${VERIFICATION_REQUEST_ID}`)
+    if (['UNROUTABLE', 'UNDELIVERABLE', 'FAILED'].includes(status)) {
+      throw new Error(`Courier production verification failed with status ${status}`)
     }
+  } catch (error) {
+    console.warn(`[courier-bootstrap] previous verification lookup incomplete: ${error instanceof Error ? error.message : error}`)
   }
 }
 
@@ -204,6 +201,7 @@ try {
   await verifyTemplate(template.id)
   console.log(`[courier-bootstrap] COURIER_TEMPLATE_LOGIN_NOTIFICATION=${template.id}`)
   await sendOneTimeVerification(template.id, template.created)
+  await verifyPreviousDelivery()
 } catch (error) {
   console.error('[courier-bootstrap] failed', error)
   process.exit(1)
