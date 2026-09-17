@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const [fetching, setFetching] = useState(true)
   const [accountLoaded, setAccountLoaded] = useState(false)
 
+  const [deleteReason, setDeleteReason] = useState('')
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -95,6 +96,16 @@ export default function ProfilePage() {
 
   async function handleDeleteAccount() {
     setDeleteError('')
+    const reason = deleteReason.trim()
+
+    if (reason.length < 5) {
+      setDeleteError('Please tell us why you want to delete your account.')
+      return
+    }
+    if (reason.length > 500) {
+      setDeleteError('Deletion reason must be 500 characters or fewer.')
+      return
+    }
     if (deleteConfirmation !== 'DELETE') {
       setDeleteError('Type DELETE exactly to confirm account deletion.')
       return
@@ -113,7 +124,7 @@ export default function ProfilePage() {
         body: JSON.stringify({
           confirm: deleteConfirmation,
           password: deletePassword,
-          reason: 'User requested account deletion from profile settings',
+          reason,
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -121,7 +132,7 @@ export default function ProfilePage() {
         setDeleteError(data.error || 'Unable to delete account')
         return
       }
-      window.location.href = '/'
+      window.location.href = '/?accountDeleted=1'
     } catch {
       setDeleteError('Unable to delete your account right now.')
     } finally {
@@ -223,7 +234,7 @@ export default function ProfilePage() {
                 ) : (
                   <>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      Deleting your account permanently removes the active account and signs you out. Limited records may be retained only for fraud prevention, payment disputes, accounting, security, legal claims, or lawful requests under the retention policy.
+                      Deleting your account permanently removes the active account and signs you out. Limited records may be retained only for fraud prevention, payment disputes, accounting, security, legal claims, or lawful requests under the retention policy. Your deletion reason is stored with that restricted archive so the Master Admin can understand why the account was closed.
                     </p>
 
                     {deleteError && (
@@ -232,6 +243,20 @@ export default function ProfilePage() {
 
                     <div className="mt-5 space-y-4">
                       <div>
+                        <Label htmlFor="delete-reason">Why are you deleting your account?</Label>
+                        <textarea
+                          id="delete-reason"
+                          required
+                          minLength={5}
+                          maxLength={500}
+                          value={deleteReason}
+                          onChange={(e) => setDeleteReason(e.target.value)}
+                          className="mt-1 min-h-28 w-full resize-y rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                          placeholder="For example: I no longer need the service."
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">{deleteReason.length}/500 characters</p>
+                      </div>
+                      <div>
                         <Label htmlFor="delete-password">Current password</Label>
                         <Input id="delete-password" type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} className="mt-1" />
                       </div>
@@ -239,7 +264,12 @@ export default function ProfilePage() {
                         <Label htmlFor="delete-confirmation">Type DELETE to confirm</Label>
                         <Input id="delete-confirmation" value={deleteConfirmation} onChange={(e) => setDeleteConfirmation(e.target.value)} className="mt-1" placeholder="DELETE" />
                       </div>
-                      <Button type="button" variant="destructive" disabled={deleting || deleteConfirmation !== 'DELETE' || !deletePassword} onClick={handleDeleteAccount}>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        disabled={deleting || deleteReason.trim().length < 5 || deleteConfirmation !== 'DELETE' || !deletePassword}
+                        onClick={handleDeleteAccount}
+                      >
                         <Trash2 className="size-4" />
                         {deleting ? 'Deleting account...' : 'Delete my account'}
                       </Button>
