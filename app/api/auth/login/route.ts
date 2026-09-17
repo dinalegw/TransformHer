@@ -6,6 +6,7 @@ import { getBlockedLoginState } from '@/lib/login-access'
 import { claimNotification } from '@/lib/notification-dedupe'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { SUPPORT_EMAIL } from '@/lib/support'
+import { recordSuccessfulLoginAccess } from '@/lib/access-history'
 
 function safeLocation(req: Request): string {
   const rawCity = req.headers.get('x-vercel-ip-city')?.trim() || ''
@@ -143,6 +144,13 @@ export async function POST(req: Request) {
       ? NextResponse.redirect(new URL(redirectTo, req.url), 303)
       : NextResponse.json({ user }, { status: 200 })
     setSessionCookie(res, sessionId)
+
+    try {
+      await recordSuccessfulLoginAccess(user.id, req)
+    } catch (err) {
+      // Security telemetry must never prevent an otherwise valid sign-in.
+      console.error('[auth] unable to record successful access event', err)
+    }
 
     try {
       // A browser retry/double-submit or two horizontally-scaled functions should
