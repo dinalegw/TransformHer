@@ -20,31 +20,68 @@ const NAV = [
   { href: '/cart', label: 'Cart' },
 ]
 
+type HeaderUser = {
+  id: string
+  name: string
+  email: string
+  isAdmin: boolean
+  username?: string
+  showFullName?: boolean
+}
+
 export function SiteHeader() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
-  const [user, setUser] = useState<{ id: string; name: string; email: string; isAdmin: boolean; username?: string; showFullName?: boolean } | null | 'loading'>('loading')
+  const [user, setUser] = useState<HeaderUser | null | 'loading'>('loading')
   const isLoggedIn = user !== null && user !== 'loading'
-
   const [cartCount, setCartCount] = useState(0)
 
   const fetchCartCount = useCallback(async () => {
     try {
-      const res = await fetch('/api/cart')
+      const res = await fetch('/api/cart', { cache: 'no-store' })
+      if (!res.ok) {
+        setCartCount(0)
+        return
+      }
       const data = await res.json()
       const items = data?.items ?? []
       setCartCount(items.length)
-    } catch { setCartCount(0) }
+    } catch {
+      setCartCount(0)
+    }
   }, [])
+
+  const refreshAuth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/me', { cache: 'no-store' })
+      const data = await res.json()
+      const nextUser = data.user ?? null
+      setUser(nextUser)
+      if (nextUser) await fetchCartCount()
+      else setCartCount(0)
+    } catch {
+      setUser(null)
+      setCartCount(0)
+    }
+  }, [fetchCartCount])
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled) { setUser(data.user); if (data.user) fetchCartCount() } })
-      .catch(() => { if (!cancelled) setUser(null) })
-    return () => { cancelled = true }
-  }, [fetchCartCount])
+
+    const load = async () => {
+      if (cancelled) return
+      await refreshAuth()
+    }
+
+    void load()
+    const onAuthChanged = () => void load()
+    window.addEventListener('auth-changed', onAuthChanged)
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('auth-changed', onAuthChanged)
+    }
+  }, [refreshAuth])
 
   useEffect(() => {
     if (user === null || user === 'loading') return
@@ -86,9 +123,7 @@ export function SiteHeader() {
                       </span>
                     )}
                   </span>
-                ) : (
-                  item.label
-                )}
+                ) : item.label}
               </Link>
             )
           })}
@@ -96,7 +131,7 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle />
-          <AdminNotifications />
+          {user !== 'loading' && user?.isAdmin ? <AdminNotifications /> : null}
           <AuthButtons user={user} />
         </div>
 
@@ -141,7 +176,17 @@ export function SiteHeader() {
                     {getDisplayName(user!)}
                   </span>
                   <Button asChild variant="ghost" size="sm" className="rounded-full">
-                    <Link href="/api/auth/logout" onClick={(e) => { e.preventDefault(); fetch('/api/auth/logout', { method: 'POST' }).then(() => { setOpen(false); window.location.href = '/' }) }}>
+                    <Link
+                      href="/api/auth/logout"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        fetch('/api/auth/logout', { method: 'POST' }).then(() => {
+                          setOpen(false)
+                          window.dispatchEvent(new Event('auth-changed'))
+                          window.location.href = '/'
+                        })
+                      }}
+                    >
                       Sign out
                     </Link>
                   </Button>
