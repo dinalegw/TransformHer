@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { UserPlus, Eye, EyeOff, CheckCircle2, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,7 +8,6 @@ import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 
 export default function SignupPage() {
-  const _router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -33,16 +31,18 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ name: trimmedName, email: trimmedEmail, password }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error || 'Registration failed')
       } else {
+        window.dispatchEvent(new Event('auth-changed'))
         setDone(true)
       }
     } catch {
-      setError('Something went wrong')
+      setError('Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -55,21 +55,15 @@ export default function SignupPage() {
         <main className="flex flex-1 items-center justify-center px-4 py-16">
           <div className="w-full max-w-sm text-center">
             <CheckCircle2 className="mx-auto size-16 text-green-500" />
-            <h1 className="mt-4 font-heading text-3xl text-foreground">
-              Congratulations!
-            </h1>
-            <p className="mt-2 text-lg text-foreground/90">
-              Your account has been created successfully.
-            </p>
+            <h1 className="mt-4 font-heading text-3xl text-foreground">Congratulations!</h1>
+            <p className="mt-2 text-lg text-foreground/90">Your account has been created successfully.</p>
             <div className="mt-6 rounded-xl border border-border bg-card p-5 text-left">
               <div className="flex items-start gap-3">
-                <Mail className="mt-0.5 size-5 text-primary shrink-0" />
+                <Mail className="mt-0.5 size-5 shrink-0 text-primary" />
                 <div className="text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">Check your inbox</p>
                   <p className="mt-1">
-                    We sent a verification email to <strong>{email}</strong>.
-                    Click the link in the email to verify your account and activate
-                    your membership.
+                    We sent a verification email to <strong>{email}</strong>. Click the link in the email to verify your account and activate your membership.
                   </p>
                 </div>
               </div>
@@ -98,26 +92,21 @@ export default function SignupPage() {
           <div className="text-center">
             <UserPlus className="mx-auto size-8 text-primary" />
             <h1 className="mt-4 font-heading text-3xl text-foreground">Create your account</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Join our community
-            </p>
+            <p className="mt-2 text-sm text-muted-foreground">Join our community</p>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
-                {error}
-              </p>
+              <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>
             )}
 
             <div>
-              <label htmlFor="name" className="text-sm font-medium text-foreground">
-                Full name
-              </label>
+              <label htmlFor="name" className="text-sm font-medium text-foreground">Full name</label>
               <input
                 id="name"
                 type="text"
                 required
+                autoComplete="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -126,13 +115,12 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="email" className="text-sm font-medium text-foreground">
-                Email
-              </label>
+              <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
               <input
                 id="email"
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -141,14 +129,13 @@ export default function SignupPage() {
             </div>
 
             <div>
-              <label htmlFor="password" className="text-sm font-medium text-foreground">
-                Password
-              </label>
+              <label htmlFor="password" className="text-sm font-medium text-foreground">Password</label>
               <div className="relative mt-1">
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   required
+                  autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="h-9 w-full rounded-lg border border-input bg-transparent px-3 pr-10 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -172,9 +159,7 @@ export default function SignupPage() {
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
             Already have an account?{' '}
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Sign in
-            </Link>
+            <Link href="/login" className="font-medium text-primary hover:underline">Sign in</Link>
           </p>
         </div>
       </main>
