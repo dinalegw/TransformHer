@@ -46,7 +46,8 @@ const TEMPLATES = [
     content: emailContent('Reset your TransformHer password', [
       text('We received a request to reset your TransformHer password.'),
       action('Reset password', '{{resetLink}}'),
-      text('If you did not request this change, you can ignore this email.'),
+      text('This reset link expires in 1 hour and can only be used once.'),
+      text('If you did not request this change, you can safely ignore this email.'),
     ]),
   },
   {
@@ -216,19 +217,52 @@ async function listAll(pathname) {
   return all
 }
 
-async function ensureRoutingStrategy() {
+async function getConfiguredEmailProviders() {
+  const [configuredProviders, emailCatalog] = await Promise.all([
+    listAll('/providers'),
+    listAll('/providers/catalog?channel=email'),
+  ])
+
+  const emailProviderTypes = new Set(emailCatalog.map((item) => item?.provider).filter(Boolean))
+  const providerKeys = [...new Set(
+    configuredProviders
+      .map((item) => item?.provider)
+      .filter((provider) => provider && emailProviderTypes.has(provider)),
+  )]
+
+  if (providerKeys.length === 0) {
+    throw new Error('No configured Courier email provider is available in the Production workspace')
+  }
+
+  // Provider identifiers are safe to log; provider settings/credentials never are.
+  console.log(`[courier-templates] configured email providers: ${providerKeys.join(', ')}`)
+  return providerKeys
+}
+
+async function ensureRoutingStrategy(emailProviders) {
   const strategies = await listAll('/routing-strategies')
   const existing = strategies.find((item) => item?.name === ROUTING_NAME)
-  if (existing?.id) return existing.id
+  const desired = {
+    name: ROUTING_NAME,
+    description: 'Primary email routing for TransformHer transactional notifications',
+    tags: ['transformher', 'production', 'email'],
+    routing: { method: 'single', channels: ['email'] },
+    channels: { email: { providers: emailProviders } },
+    providers: {},
+  }
+
+  if (existing?.id) {
+    await courier(`/routing-strategies/${encodeURIComponent(existing.id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(desired),
+    })
+    console.log(`[courier-templates] verified routing strategy ${existing.id}`)
+    return existing.id
+  }
 
   const created = await courier('/routing-strategies', {
     method: 'POST',
-    body: JSON.stringify({
-      name: ROUTING_NAME,
-      description: 'Primary email routing for TransformHer transactional notifications',
-      tags: ['transformher', 'production', 'email'],
-      routing: { method: 'single', channels: ['email'] },
-    }),
+    body: JSON.stringify(desired),
   })
 
   if (!created?.id) throw new Error('Courier routing strategy creation returned no id')
@@ -251,6 +285,30 @@ async function repairContent(id, definition) {
   if (!hasEmailChannel(published)) {
     throw new Error(`Template ${id} has no published email channel after update`)
   }
+  return id
+}
+
+async function replaceTemplate(id, definition, strategyId) {
+  await courier(`/notifications/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      published: false,
+      notification: {
+        name: definition.canonicalName,
+        tags: definition.tags,
+        brand: null,
+        subscription: null,
+        routing: { strategy_id: strategyId },
+        content: definition.content,
+      },
+    }),
+  })
+
+  await courier(`/notifications/${encodeURIComponent(id)}/publish`, {
+    method: 'POST',
+    body: '{}',
+  })
+  await repairContent(id, definition)
   return id
 }
 
@@ -293,7 +351,7 @@ async function ensureTemplate(definition, strategyId, templates) {
 
   if (candidate?.id) {
     try {
-      const id = await repairContent(candidate.id, definition)
+      const id = await replaceTemplate(candidate.id, definition, strategyId)
       console.log(`[courier-templates] verified ${definition.key}=${id} source=${candidate.source}`)
       return id
     } catch (error) {
@@ -334,7 +392,8 @@ async function writeManifest(ids) {
 }
 
 try {
-  const strategyId = await ensureRoutingStrategy()
+  const emailProviders = await getConfiguredEmailProviders()
+  const strategyId = await ensureRoutingStrategy(emailProviders)
   const templates = await listAll('/notifications')
   const ids = {}
 
@@ -344,7 +403,7 @@ try {
 
   await archiveDuplicateTemplates(ids)
   await writeManifest(ids)
-  console.log('[courier-templates] all TransformHer transactional email templates are published with an email channel')
+  console.log('[courier-templates] all TransformHer transactional email templates are published, routed and provider-backed')
 } catch (error) {
   console.error('[courier-templates] failed', error)
   process.exit(1)
