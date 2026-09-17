@@ -2,7 +2,7 @@
 
 import { useState, useEffect, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
-import { Save, Trash2 } from 'lucide-react'
+import { BadgeCheck, Loader2, MailCheck, Save, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +13,7 @@ export default function ProfilePage() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [emailVerified, setEmailVerified] = useState(false)
   const [role, setRole] = useState('user')
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
@@ -22,6 +23,12 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [accountLoaded, setAccountLoaded] = useState(false)
+
+  const [verificationRequested, setVerificationRequested] = useState(false)
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationLoading, setVerificationLoading] = useState(false)
+  const [verificationError, setVerificationError] = useState('')
+  const [verificationNotice, setVerificationNotice] = useState('')
 
   const [deleteReason, setDeleteReason] = useState('')
   const [deletePassword, setDeletePassword] = useState('')
@@ -50,6 +57,7 @@ export default function ProfilePage() {
 
         setName(data.user.name || '')
         setEmail(data.user.email || '')
+        setEmailVerified(Boolean(data.user.emailVerified))
         setRole(data.user.role || 'user')
         setUsername(data.user.username || '')
         setPhone(data.user.phone || '')
@@ -91,6 +99,61 @@ export default function ProfilePage() {
       setError('Unable to update your profile right now.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function requestVerificationCode() {
+    setVerificationLoading(true)
+    setVerificationError('')
+    setVerificationNotice('')
+    try {
+      const res = await fetch('/api/auth/email-verification-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setVerificationError(data.error || 'Unable to send a verification code.')
+        return
+      }
+      if (data.verified) {
+        setEmailVerified(true)
+        setVerificationRequested(false)
+        setVerificationNotice('Your email is already verified and locked to this account.')
+        return
+      }
+      setVerificationRequested(true)
+      setVerificationNotice(data.message || 'A verification code was sent to your email.')
+    } catch {
+      setVerificationError('Unable to send a verification code right now.')
+    } finally {
+      setVerificationLoading(false)
+    }
+  }
+
+  async function confirmVerificationCode() {
+    setVerificationLoading(true)
+    setVerificationError('')
+    setVerificationNotice('')
+    try {
+      const res = await fetch('/api/auth/email-verification-code', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: verificationCode }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setVerificationError(data.error || 'Unable to verify that code.')
+        return
+      }
+      setEmailVerified(true)
+      setVerificationRequested(false)
+      setVerificationCode('')
+      setVerificationNotice(data.message || 'Your email has been verified successfully.')
+    } catch {
+      setVerificationError('Unable to verify your email right now.')
+    } finally {
+      setVerificationLoading(false)
     }
   }
 
@@ -193,11 +256,89 @@ export default function ProfilePage() {
               <Input id="name" type="text" required value={name} onChange={(e) => setName(e.target.value)} className="mt-1" />
             </div>
 
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" disabled value={email} className="mt-1" />
-              <p className="mt-1 text-xs text-muted-foreground">Email cannot be changed</p>
-            </div>
+            <section className="rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <Label htmlFor="email">Email</Label>
+                  <Input id="email" type="email" disabled value={email} className="mt-1" />
+                </div>
+                <span className={`mt-6 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${emailVerified ? 'border-green-300 bg-green-50 text-green-700' : 'border-amber-300 bg-amber-50 text-amber-800'}`}>
+                  {emailVerified ? <BadgeCheck className="size-3.5" /> : <MailCheck className="size-3.5" />}
+                  {emailVerified ? 'Verified & locked' : 'Not verified'}
+                </span>
+              </div>
+
+              {emailVerified ? (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  This verified email is locked to your TransformHer account and cannot be changed from profile settings.
+                </p>
+              ) : (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/60 p-4">
+                  <p className="text-sm text-foreground">
+                    Verify this email to secure your account. We will send a unique 6-digit code to <strong>{email}</strong>.
+                  </p>
+
+                  {verificationError && (
+                    <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{verificationError}</p>
+                  )}
+                  {verificationNotice && (
+                    <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">{verificationNotice}</p>
+                  )}
+
+                  {!verificationRequested ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-4 rounded-full"
+                      disabled={verificationLoading}
+                      onClick={requestVerificationCode}
+                    >
+                      {verificationLoading ? <Loader2 className="size-4 animate-spin" /> : <MailCheck className="size-4" />}
+                      {verificationLoading ? 'Sending code...' : 'Verify email'}
+                    </Button>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <Label htmlFor="verification-code">6-digit verification code</Label>
+                        <Input
+                          id="verification-code"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          value={verificationCode}
+                          onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                          className="mt-1 max-w-52 text-center font-mono text-lg tracking-[0.35em]"
+                          placeholder="000000"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          className="rounded-full"
+                          disabled={verificationLoading || verificationCode.length !== 6}
+                          onClick={confirmVerificationCode}
+                        >
+                          {verificationLoading && <Loader2 className="size-4 animate-spin" />}
+                          Confirm code
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="rounded-full"
+                          disabled={verificationLoading}
+                          onClick={requestVerificationCode}
+                        >
+                          Resend code
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        The code expires after 10 minutes. For security, too many incorrect attempts require a new code.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
 
             <div>
               <Label htmlFor="username">Username</Label>
