@@ -4,7 +4,6 @@ import { useState, type FormEvent, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { LogIn, Eye, EyeOff } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 
@@ -15,10 +14,10 @@ function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(searchParams.get('error') || '')
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
 
@@ -32,7 +31,7 @@ function LoginForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ email: trimmedEmail, password }),
+        body: JSON.stringify({ email: trimmedEmail, password, redirect: redirectTo }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -60,15 +59,22 @@ function LoginForm() {
             <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <form
+            action="/api/auth/login"
+            method="post"
+            onSubmit={handleSubmit}
+            className="mt-8 space-y-5"
+          >
+            <input type="hidden" name="redirect" value={redirectTo} />
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>
+              <p role="alert" aria-live="polite" className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>
             )}
 
             <div>
               <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 required
                 autoComplete="email"
@@ -84,6 +90,7 @@ function LoginForm() {
               <div className="relative mt-1">
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
@@ -97,6 +104,7 @@ function LoginForm() {
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
@@ -108,9 +116,13 @@ function LoginForm() {
               </div>
             </div>
 
-            <Button type="submit" disabled={loading} className="w-full rounded-full">
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex h-9 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50"
+            >
               {loading ? 'Signing in...' : 'Sign in'}
-            </Button>
+            </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -126,7 +138,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="min-h-svh" />}>
       <LoginForm />
     </Suspense>
   )
