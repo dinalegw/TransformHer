@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser, updateUser } from '@/lib/auth'
+import { getCurrentUser, isEmailVerified, updateUser } from '@/lib/auth'
 import { getDb } from '@/lib/db/connection'
 
 async function ensureDatabaseAvailable() {
@@ -18,7 +18,14 @@ export async function GET() {
 
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ user: null }, { status: 200 })
-    return NextResponse.json({ user })
+    const emailVerified = await isEmailVerified(user.email)
+    return NextResponse.json({
+      user: {
+        ...user,
+        emailVerified,
+        emailLocked: emailVerified,
+      },
+    })
   } catch (err) {
     console.error('[auth/me] failed to load account', err)
     return NextResponse.json(
@@ -43,6 +50,8 @@ export async function PUT(req: Request) {
     const body = await req.json()
     const { name, username, phone, showFullName } = body
 
+    // Email is intentionally not accepted by this endpoint. Verified account
+    // emails are identity anchors and cannot be edited from profile settings.
     const updated = await updateUser(user.id, { name, username, phone, showFullName })
     if (!updated) {
       return NextResponse.json(
