@@ -5,6 +5,7 @@ const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   '/api/auth/register': { limit: 3, windowMs: 60_000 },
   '/api/auth/forgot-password': { limit: 3, windowMs: 60_000 },
   '/api/auth/reset-password': { limit: 5, windowMs: 60_000 },
+  '/api/account/delete': { limit: 3, windowMs: 5 * 60_000 },
   '/api/paystack/initialize': { limit: 10, windowMs: 60_000 },
   '/api/cart/checkout': { limit: 5, windowMs: 60_000 },
 }
