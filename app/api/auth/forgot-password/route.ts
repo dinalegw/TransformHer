@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { generateResetToken, emailExists } from '@/lib/auth'
+import { emailExists } from '@/lib/auth'
+import { generatePasswordResetToken } from '@/lib/password-reset'
 import { sendPasswordResetEmail } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -10,7 +11,7 @@ export async function POST(req: Request) {
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
-        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
       )
     }
 
@@ -28,7 +29,9 @@ export async function POST(req: Request) {
     const exists = await emailExists(normalizedEmail)
     if (!exists) return NextResponse.json(message)
 
-    const token = generateResetToken(normalizedEmail)
+    const token = await generatePasswordResetToken(normalizedEmail)
+    if (!token) return NextResponse.json(message)
+
     const resetLink = `${getBaseUrl()}/reset-password?token=${token}`
 
     try {
