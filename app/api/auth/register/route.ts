@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import {
-  createUser, createSession, generateEmailVerificationToken,
-  validateEmail, validatePassword, validateName,
+  createUser,
+  generateEmailVerificationToken,
+  validateEmail,
+  validatePassword,
+  validateName,
 } from '@/lib/auth'
 import { sendWelcomeVerificationEmail } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
@@ -34,14 +37,11 @@ function formError(req: Request, message: string) {
   return NextResponse.redirect(url, 303)
 }
 
-function setSessionCookie(res: NextResponse, sessionId: string) {
-  res.cookies.set('session', sessionId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60,
-    path: '/',
-  })
+function signupSuccess(req: Request, mailSent: boolean) {
+  const url = new URL('/signup', req.url)
+  url.searchParams.set('created', '1')
+  url.searchParams.set('mail', mailSent ? 'sent' : 'failed')
+  return NextResponse.redirect(url, 303)
 }
 
 export async function POST(req: Request) {
@@ -73,22 +73,22 @@ export async function POST(req: Request) {
     if (passwordError) return htmlForm ? formError(req, passwordError) : NextResponse.json({ error: passwordError }, { status: 400 })
 
     const user = await createUser(name.trim(), email, password)
-    const sessionId = await createSession(user.id)
-    const res = htmlForm
-      ? NextResponse.redirect(new URL('/books?accountCreated=1', req.url), 303)
-      : NextResponse.json({ user }, { status: 201 })
-    setSessionCookie(res, sessionId)
 
+    // Account creation and authentication are intentionally separate. A new user
+    // is not issued a session cookie until they explicitly sign in.
     const token = generateEmailVerificationToken(user.email)
     const verifyLink = `${getBaseUrl()}/verify-email?token=${token}`
+    let verificationEmailSent = false
 
     try {
       await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
+      verificationEmailSent = true
     } catch (err) {
       console.error('Failed to send welcome email:', err)
     }
 
-    return res
+    if (htmlForm) return signupSuccess(req, verificationEmailSent)
+    return NextResponse.json({ user, verificationEmailSent }, { status: 201 })
   } catch (err) {
     console.error('Registration error:', err)
 
