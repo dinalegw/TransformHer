@@ -3,22 +3,34 @@ import { requireAdmin } from '@/lib/auth'
 import { getAllMergedBooks } from '@/lib/admin-books'
 import { getDb, userPurchases, user as userTable } from '@/lib/db'
 import { eq, desc, sql } from 'drizzle-orm'
+import { hasPermission } from '@/lib/permissions'
+
+function parsePositiveInteger(value: string | null, fallback: number, max: number) {
+  if (!value) return fallback
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1) return fallback
+  return Math.min(parsed, max)
+}
 
 export async function GET(req: Request) {
   try {
-    await requireAdmin()
+    const admin = await requireAdmin()
+    if (admin.role !== 'master_admin' && !hasPermission(admin.permissions, 'view_orders')) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const db = await getDb()
     if (!db) {
       return NextResponse.json({ error: 'Database not available' }, { status: 503 })
     }
 
     const { searchParams } = new URL(req.url)
-    const page = Math.max(1, Number(searchParams.get('page') || '1'))
-    const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit') || '50')))
+    const page = parsePositiveInteger(searchParams.get('page'), 1, 1_000_000)
+    const limit = parsePositiveInteger(searchParams.get('limit'), 50, 100)
     const offset = (page - 1) * limit
 
     const allBooks = await getAllMergedBooks({ includeArchived: true })
-    const bookBySlug = new Map(allBooks.map(b => [b.slug, b]))
+    const bookBySlug = new Map(allBooks.map((book) => [book.slug, book]))
 
     const baseQuery = db.select({
       id: userPurchases.id,
@@ -41,44 +53,35 @@ export async function GET(req: Request) {
 
     const orders = await baseQuery.limit(limit).offset(offset)
 
-    const enriched = orders.map((o: {
-      id: number
-      userId: string
-      userName: string | null
-      userEmail: string | null
-      bookSlug: string
-      purchaseDate: Date
-      released: boolean
-      releaseAt: Date | null
-      archived?: boolean
-    }) => {
-      const book = bookBySlug.get(o.bookSlug)
+    const enriched = orders.map((order) => {
+      const book = bookBySlug.get(order.bookSlug)
       return {
-        id: o.id,
-        userId: o.userId,
-        userName: o.userName ?? 'Unknown',
-        userEmail: o.userEmail ?? 'unknown@example.com',
-        bookSlug: o.bookSlug,
-        bookTitle: book?.title ?? o.bookSlug,
-        purchaseDate: o.purchaseDate.toISOString(),
-        released: o.released,
-        releaseAt: o.releaseAt ? o.releaseAt.toISOString() : null,
-        archived: o.archived,
+        id: order.id,
+        userId: order.userId,
+        userName: order.userName ?? 'Unknown',
+        userEmail: order.userEmail ?? 'unknown@example.com',
+        bookSlug: order.bookSlug,
+        bookTitle: book?.title ?? order.bookSlug,
+        purchaseDate: order.purchaseDate.toISOString(),
+        released: order.released,
+        releaseAt: order.releaseAt ? order.releaseAt.toISOString() : null,
+        archived: order.archived,
       }
     })
 
+    const safeTotal = total ?? 0
     return NextResponse.json({
       orders: enriched,
-      total: total ?? 0,
+      total: safeTotal,
       page,
       limit,
-      totalPages: Math.ceil((total ?? 0) / limit),
+      totalPages: Math.ceil(safeTotal / limit),
     })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('Admin orders error:', err)
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+    return NextResponse.json({ error: 'Unable to load orders right now.' }, { status: 500 })
   }
 }
