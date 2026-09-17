@@ -9,6 +9,7 @@ import {
   submitPendingChange,
 } from '@/lib/admin-books'
 import type { Book } from '@/lib/admin-books'
+import { validateBookMutation } from '@/lib/book-validation'
 
 export async function GET(
   _req: Request,
@@ -18,7 +19,7 @@ export async function GET(
     await requireAdmin()
     const { id } = await params
     const bookId = Number(id)
-    if (isNaN(bookId)) {
+    if (Number.isNaN(bookId)) {
       return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
     }
     const book = await getAdminBook(bookId)
@@ -43,10 +44,25 @@ export async function PUT(
     const user = await requireAdmin()
     const { id } = await params
     const bookId = Number(id)
-    if (isNaN(bookId)) {
+    if (Number.isNaN(bookId)) {
       return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
     }
+
     const body = await req.json()
+    let validated
+    try {
+      validated = validateBookMutation(body, { partial: true })
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Invalid book data' },
+        { status: 400 },
+      )
+    }
+
+    if (Object.keys(validated).length === 0) {
+      return NextResponse.json({ error: 'No supported book fields were provided' }, { status: 400 })
+    }
+
     const isMaster = user.role === 'master_admin'
 
     if (!isMaster) {
@@ -59,19 +75,25 @@ export async function PUT(
       }
       const change = await submitPendingChange(
         'update', existing.slug, existing.title,
-        body as Partial<Book>, user.id, user.email,
+        validated as Partial<Book>, user.id, user.email,
       )
       return NextResponse.json({ change, pending: true }, { status: 202 })
     }
 
-    const book = await updateAdminBook(bookId, body)
+    const book = await updateAdminBook(bookId, validated)
     return NextResponse.json({ book })
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthorized: admin access required') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 500 })
+    if (err instanceof Error && err.message === 'Book not found') {
+      return NextResponse.json({ error: err.message }, { status: 404 })
+    }
+    if (err instanceof Error && err.message === 'A book with this slug already exists') {
+      return NextResponse.json({ error: err.message }, { status: 409 })
+    }
+    console.error('Admin book PUT error:', err)
+    return NextResponse.json({ error: 'Unable to update this book right now.' }, { status: 500 })
   }
 }
 
@@ -95,12 +117,12 @@ export async function DELETE(
 
       let book: Book | undefined
       if (slugParam) {
-      const db = await getDb()
-      if (db) {
-        const rows = await db.select().from(books).where(eq(books.slug, slugParam)).limit(1)
+        const db = await getDb()
+        if (db) {
+          const rows = await db.select().from(books).where(eq(books.slug, slugParam)).limit(1)
           book = rows[0] as Book | undefined
         }
-      } else if (!isNaN(bookId)) {
+      } else if (!Number.isNaN(bookId)) {
         book = await getAdminBook(bookId)
       }
 
@@ -115,7 +137,6 @@ export async function DELETE(
       return NextResponse.json({ change, pending: true }, { status: 202 })
     }
 
-    // Master: direct delete
     const { searchParams } = new URL(req.url)
     const source = searchParams.get('source')
 
@@ -127,7 +148,7 @@ export async function DELETE(
       await deleteBookBySlug(slug)
     } else {
       const bookId = Number(id)
-      if (isNaN(bookId)) {
+      if (Number.isNaN(bookId)) {
         const slug = searchParams.get('slug')
         if (slug) {
           await deleteBookBySlug(slug)
@@ -144,7 +165,10 @@ export async function DELETE(
     if (err instanceof Error && err.message === 'Unauthorized: admin access required') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 500 })
+    if (err instanceof Error && err.message === 'Book not found') {
+      return NextResponse.json({ error: err.message }, { status: 404 })
+    }
+    console.error('Admin book DELETE error:', err)
+    return NextResponse.json({ error: 'Unable to delete this book right now.' }, { status: 500 })
   }
 }
