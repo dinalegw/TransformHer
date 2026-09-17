@@ -14,53 +14,64 @@ const REQUIRED_VARS = [
   'ADMIN_EMAIL',
 ]
 
-const OPTIONAL_VARS = [
-  'NEXT_PUBLIC_BASE_URL',
-  'BLOB_READ_WRITE_TOKEN',
-]
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const checks: Record<string, { set: boolean; note?: string }> = {}
 
   for (const key of REQUIRED_VARS) {
     const val = process.env[key]
-    checks[key] = { set: !!val }
-    if (!val) {
-      checks[key].note = 'MISSING — add this in Vercel Dashboard'
-    }
+    checks[key] = { set: Boolean(val) }
+    if (!val) checks[key].note = 'MISSING — add this to the Production environment'
   }
 
   checks.COURIER_API_KEY = {
-    set: !!process.env.COURIER_API_KEY,
-    note: process.env.COURIER_API_KEY ? undefined : 'MISSING — set COURIER_API_KEY',
+    set: Boolean(process.env.COURIER_API_KEY),
+    note: process.env.COURIER_API_KEY ? undefined : 'MISSING — Courier email cannot send',
   }
 
-  for (const key of OPTIONAL_VARS) {
-    const val = process.env[key]
-    checks[key] = { set: !!val }
-    if (!val) {
-      checks[key].note = 'not set — will use fallback behavior'
-    }
+  checks.COURIER_TEMPLATE_LOGIN_NOTIFICATION = {
+    set: Boolean(process.env.COURIER_TEMPLATE_LOGIN_NOTIFICATION),
+    note: process.env.COURIER_TEMPLATE_LOGIN_NOTIFICATION
+      ? undefined
+      : 'not set — login notifications use the Courier inline fallback',
   }
 
-  checks['VERCEL_URL'] = { set: !!process.env.VERCEL_URL }
+  checks.NEXT_PUBLIC_BASE_URL = {
+    set: Boolean(process.env.NEXT_PUBLIC_BASE_URL),
+    note: process.env.NEXT_PUBLIC_BASE_URL
+      ? undefined
+      : 'not set — deployment URL fallback is used',
+  }
 
-  // This reports connectivity only—never database credentials or data.
+  checks.BLOB_READ_WRITE_TOKEN = {
+    set: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+    note: process.env.BLOB_READ_WRITE_TOKEN
+      ? undefined
+      : 'MISSING — production admin book uploads are disabled until persistent Blob storage is connected',
+  }
+
+  checks.VERCEL_URL = { set: Boolean(process.env.VERCEL_URL) }
+
+  // Connectivity only. Never return credentials or database data.
   const db = await getDb()
   checks.DATABASE = {
-    set: !!db,
-    note: db ? undefined : 'unavailable — add a Postgres connection URL and run migrations',
+    set: Boolean(db),
+    note: db ? undefined : 'database unavailable',
   }
 
-  const allSet = requiredEnvCheck()
+  const coreReady = REQUIRED_VARS.every((key) => process.env[key])
+    && Boolean(process.env.COURIER_API_KEY)
+    && Boolean(db)
+  const storageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 
   return NextResponse.json({
-    status: allSet ? 'ok' : 'missing_vars',
+    status: coreReady ? (storageReady ? 'ok' : 'degraded') : 'error',
+    coreReady,
+    storageReady,
     checks,
+  }, {
+    status: coreReady ? 200 : 503,
+    headers: { 'Cache-Control': 'no-store' },
   })
-}
-
-function requiredEnvCheck(): boolean {
-  return REQUIRED_VARS.every(k => process.env[k])
-    && !!process.env.COURIER_API_KEY
 }
