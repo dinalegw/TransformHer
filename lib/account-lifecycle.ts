@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { eq, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { deletedUserArchives, user as userTable, userPurchases, cart, pendingChanges } from '@/lib/db/schema'
+import { ensureAccessHistorySchema } from '@/lib/access-history'
 import {
   sendAccountArchivedEmail,
   sendAccountFrozenEmail,
@@ -162,7 +163,11 @@ export async function archiveAndDeleteUser(
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
+  // Security access history is created lazily so legacy databases migrate safely.
+  await ensureAccessHistorySchema()
+
   const retentionDays = getRetentionDays()
+  const archiveId = randomUUID()
 
   await db.transaction(async (tx) => {
     const rows = await tx.select().from(userTable).where(eq(userTable.id, userId)).limit(1)
@@ -179,7 +184,7 @@ export async function archiveAndDeleteUser(
     }).from(userPurchases).where(eq(userPurchases.userId, userId))
 
     await tx.insert(deletedUserArchives).values({
-      id: randomUUID(),
+      id: archiveId,
       originalUserId: target.id,
       originalEmail: target.email,
       originalName: target.name,
@@ -199,6 +204,23 @@ export async function archiveAndDeleteUser(
       createdAt: new Date(),
     })
 
+    // Retain only successful authenticated access evidence: timestamp, network
+    // address observed by the platform, user-agent/device summary and coarse
+    // request location. Never retain cookies, session tokens or passwords.
+    await tx.execute(sql`
+      INSERT INTO "deleted_user_access_events" (
+        "id", "archive_id", "original_user_id", "event_type", "ip_address",
+        "user_agent", "device_summary", "city", "country", "accessed_at", "retained_at"
+      )
+      SELECT
+        "id", ${archiveId}, "user_id", "event_type", "ip_address",
+        "user_agent", "device_summary", "city", "country", "accessed_at", now()
+      FROM "user_access_events"
+      WHERE "user_id" = ${userId}
+      ON CONFLICT ("id") DO NOTHING
+    `)
+
+    await tx.execute(sql`DELETE FROM "user_access_events" WHERE "user_id" = ${userId}`)
     await tx.delete(pendingChanges).where(eq(pendingChanges.submittedBy, userId))
     await tx.delete(cart).where(eq(cart.userId, userId))
     await tx.delete(userPurchases).where(eq(userPurchases.userId, userId))
