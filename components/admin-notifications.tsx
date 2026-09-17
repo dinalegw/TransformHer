@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect -- Intentional: poll for pending changes */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Bell, Check, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,35 +25,64 @@ export function AdminNotifications() {
   const [count, setCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const pollingAllowed = useRef(true)
 
   const fetchPending = useCallback(async () => {
+    if (!pollingAllowed.current) return
+
     try {
-      const res = await fetch('/api/admin/notifications')
+      const res = await fetch('/api/admin/notifications', { cache: 'no-store' })
+
+      // A stale/expired session or a non-admin user must not generate a
+      // permanent 30-second stream of forbidden requests.
+      if (res.status === 401 || res.status === 403) {
+        pollingAllowed.current = false
+        setPending([])
+        setCount(0)
+        return
+      }
+
       if (!res.ok) return
       const data = await res.json()
       setPending(data.pending || [])
       setCount(data.total || 0)
     } catch {
-      // silently fail
+      // A transient network failure can recover on the next scheduled poll.
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchPending()
-    const interval = setInterval(fetchPending, 30000)
-    return () => clearInterval(interval)
+    let cancelled = false
+    let timeout: ReturnType<typeof setTimeout> | undefined
+
+    const poll = async () => {
+      if (cancelled || !pollingAllowed.current) return
+      await fetchPending()
+      if (!cancelled && pollingAllowed.current) {
+        timeout = setTimeout(poll, 30000)
+      }
+    }
+
+    void poll()
+
+    return () => {
+      cancelled = true
+      if (timeout) clearTimeout(timeout)
+    }
   }, [fetchPending])
 
   const handleApprove = useCallback(async (changeId: string) => {
     setActionLoading(changeId)
     try {
-      await fetch(`/api/admin/books/${changeId}/approve`, { method: 'POST' })
-      await fetchPending()
-      router.refresh()
+      const res = await fetch(`/api/admin/books/${changeId}/approve`, { method: 'POST' })
+      if (res.ok) {
+        await fetchPending()
+        router.refresh()
+      }
     } catch {
-      // silently fail
+      // Keep the notification available so the admin can retry.
     } finally {
       setActionLoading(null)
     }
@@ -62,11 +91,13 @@ export function AdminNotifications() {
   const handleReject = useCallback(async (changeId: string) => {
     setActionLoading(changeId)
     try {
-      await fetch(`/api/admin/books/${changeId}/reject`, { method: 'POST' })
-      await fetchPending()
-      router.refresh()
+      const res = await fetch(`/api/admin/books/${changeId}/reject`, { method: 'POST' })
+      if (res.ok) {
+        await fetchPending()
+        router.refresh()
+      }
     } catch {
-      // silently fail
+      // Keep the notification available so the admin can retry.
     } finally {
       setActionLoading(null)
     }
@@ -117,15 +148,10 @@ export function AdminNotifications() {
                 </p>
               ) : (
                 pending.map((change) => (
-                  <div
-                    key={change.id}
-                    className="rounded-lg p-3 transition-colors hover:bg-muted/50"
-                  >
+                  <div key={change.id} className="rounded-lg p-3 transition-colors hover:bg-muted/50">
                     <div className="flex items-start justify-between">
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {change.bookTitle}
-                        </p>
+                        <p className="truncate text-sm font-medium text-foreground">{change.bookTitle}</p>
                         <p className="text-xs text-muted-foreground">
                           {typeLabel(change.type)} by {change.submittedByEmail}
                         </p>
@@ -142,11 +168,7 @@ export function AdminNotifications() {
                           className="text-green-600 hover:text-green-700"
                           aria-label="Approve"
                         >
-                          {actionLoading === change.id ? (
-                            <Loader2 className="size-3.5 animate-spin" />
-                          ) : (
-                            <Check className="size-3.5" />
-                          )}
+                          {actionLoading === change.id ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                         </Button>
                         <Button
                           variant="ghost"
