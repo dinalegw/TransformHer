@@ -24,56 +24,100 @@ function safeDevice(req: Request): string {
   return userAgent ? userAgent.slice(0, 180) : 'Unknown device'
 }
 
+function isHtmlForm(req: Request): boolean {
+  const contentType = req.headers.get('content-type')?.toLowerCase() || ''
+  return contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')
+}
+
+function safeRedirect(value: unknown): string {
+  if (typeof value !== 'string') return '/books'
+  const path = value.trim()
+  return path.startsWith('/') && !path.startsWith('//') ? path : '/books'
+}
+
+function formError(req: Request, message: string, redirect: string, status = 303) {
+  const url = new URL('/login', req.url)
+  url.searchParams.set('error', message)
+  if (redirect !== '/books') url.searchParams.set('redirect', redirect)
+  return NextResponse.redirect(url, status)
+}
+
+async function readBody(req: Request): Promise<{ email: unknown; password: unknown; redirect: unknown; htmlForm: boolean }> {
+  const htmlForm = isHtmlForm(req)
+  if (htmlForm) {
+    const form = await req.formData()
+    return {
+      email: form.get('email'),
+      password: form.get('password'),
+      redirect: form.get('redirect'),
+      htmlForm,
+    }
+  }
+
+  const body = await req.json()
+  return { email: body?.email, password: body?.password, redirect: body?.redirect, htmlForm }
+}
+
+function setSessionCookie(res: NextResponse, sessionId: string) {
+  res.cookies.set('session', sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60,
+    path: '/',
+  })
+}
+
 export async function POST(req: Request) {
+  let htmlForm = isHtmlForm(req)
+  let redirectTo = '/books'
+
   try {
     const rateLimit = await checkRateLimit(req, '/api/auth/login')
     if (!rateLimit.allowed) {
+      if (htmlForm) return formError(req, 'Too many login attempts. Please try again shortly.', redirectTo)
       return NextResponse.json(
         { error: 'Too many login attempts', retryAfter: rateLimit.retryAfter },
         { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
       )
     }
 
-    const body = await req.json()
+    const body = await readBody(req)
+    htmlForm = body.htmlForm
+    redirectTo = safeRedirect(body.redirect)
     const { email, password } = body
 
     const emailError = validateEmail(email)
-    if (emailError) return NextResponse.json({ error: emailError }, { status: 400 })
+    if (emailError) {
+      return htmlForm ? formError(req, emailError, redirectTo) : NextResponse.json({ error: emailError }, { status: 400 })
+    }
 
     const passwordError = validatePassword(password)
-    if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })
+    if (passwordError) {
+      return htmlForm ? formError(req, passwordError, redirectTo) : NextResponse.json({ error: passwordError }, { status: 400 })
+    }
 
-    // Distinguish an infrastructure outage from bad credentials so valid users
-    // are not told their password is wrong when Neon is temporarily unavailable.
     const db = await getDb()
     if (!db) {
-      return NextResponse.json(
-        { error: 'Sign in is temporarily unavailable. Please try again.' },
-        { status: 503 },
-      )
+      const message = 'Sign in is temporarily unavailable. Please try again.'
+      return htmlForm ? formError(req, message, redirectTo) : NextResponse.json({ error: message }, { status: 503 })
     }
 
     const user = await authenticateUser(email, password)
     if (!user) {
-      return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
+      const message = 'Invalid email or password'
+      return htmlForm ? formError(req, message, redirectTo) : NextResponse.json({ error: message }, { status: 401 })
     }
 
     const sessionId = await createSession(user.id)
-    const res = NextResponse.json({ user }, { status: 200 })
-    res.cookies.set('session', sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60,
-      path: '/',
-    })
+    const res = htmlForm
+      ? NextResponse.redirect(new URL(redirectTo, req.url), 303)
+      : NextResponse.json({ user }, { status: 200 })
+    setSessionCookie(res, sessionId)
 
     try {
-      // Include coarse Vercel location and browser/device context in the security
-      // email without logging or persisting the user's IP address.
       await sendLoginNotification(user.email, user.name, safeLocation(req), safeDevice(req))
     } catch (err) {
-      // Authentication must not fail because a notification provider is unavailable.
       console.error('Failed to send login notification:', err)
     }
 
@@ -83,10 +127,12 @@ export async function POST(req: Request) {
 
     const unavailable = err instanceof Error
       && (err.message === 'Database not available' || err.message === 'User unavailable')
+    const message = unavailable
+      ? 'Sign in is temporarily unavailable. Please try again.'
+      : 'Unable to sign in right now.'
 
-    return NextResponse.json(
-      { error: unavailable ? 'Sign in is temporarily unavailable. Please try again.' : 'Unable to sign in right now.' },
-      { status: unavailable ? 503 : 500 },
-    )
+    return htmlForm
+      ? formError(req, message, redirectTo)
+      : NextResponse.json({ error: message }, { status: unavailable ? 503 : 500 })
   }
 }
