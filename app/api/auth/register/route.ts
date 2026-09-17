@@ -111,17 +111,21 @@ export async function POST(req: Request) {
     if (htmlForm) return signupSuccess(req, verificationEmailSent)
     return clearAuthCookies(NextResponse.json({ user, verificationEmailSent }, { status: 201 }))
   } catch (err) {
-    console.error('Registration error:', err)
-
     if (err instanceof Error && err.message === 'An account with this email already exists') {
+      // Duplicate registration is an expected client conflict, not a production
+      // server failure. Avoid emitting an Error object that pollutes 5xx/error
+      // observability while still returning the correct 409/HTML form message.
+      console.info('[auth/register] duplicate email rejected')
       return htmlForm ? formError(req, err.message) : NextResponse.json({ error: err.message }, { status: 409 })
     }
 
     if (err instanceof Error && err.message === 'Database not available') {
+      console.error('[auth/register] database unavailable')
       const message = 'Account creation is temporarily unavailable. Please try again.'
       return htmlForm ? formError(req, message) : NextResponse.json({ error: message }, { status: 503 })
     }
 
+    console.error('[auth/register] unexpected registration failure', err)
     const message = 'Unable to create account right now.'
     return htmlForm ? formError(req, message) : NextResponse.json({ error: message }, { status: 500 })
   }
