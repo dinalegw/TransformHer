@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { authenticateUser, createSession, validateEmail, validatePassword } from '@/lib/auth'
+import { getDb } from '@/lib/db/connection'
 import { sendLoginNotification } from '@/lib/email'
 import { checkRateLimit } from '@/lib/rate-limit'
 
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many login attempts', retryAfter: rateLimit.retryAfter },
-        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
       )
     }
 
@@ -21,6 +22,16 @@ export async function POST(req: Request) {
 
     const passwordError = validatePassword(password)
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })
+
+    // Distinguish an infrastructure outage from bad credentials so valid users
+    // are not told their password is wrong when Neon is temporarily unavailable.
+    const db = await getDb()
+    if (!db) {
+      return NextResponse.json(
+        { error: 'Sign in is temporarily unavailable. Please try again.' },
+        { status: 503 },
+      )
+    }
 
     const user = await authenticateUser(email, password)
     if (!user) {
@@ -48,8 +59,8 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error('Login error:', err)
 
-    const unavailable = err instanceof Error &&
-      (err.message === 'Database not available' || err.message === 'User unavailable')
+    const unavailable = err instanceof Error
+      && (err.message === 'Database not available' || err.message === 'User unavailable')
 
     return NextResponse.json(
       { error: unavailable ? 'Sign in is temporarily unavailable. Please try again.' : 'Unable to sign in right now.' },
