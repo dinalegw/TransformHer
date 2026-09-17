@@ -28,12 +28,15 @@ export async function GET() {
     checks.authSchema = true
 
     const authReady = checks.database && checks.authSchema && checks.authSecret
-    const mailReady = checks.courier && checks.welcomeEmailTemplate && checks.loginEmailTemplate
+    const loginEmailReady = checks.courier
+    const mailReady = checks.courier && checks.welcomeEmailTemplate && loginEmailReady
 
     return NextResponse.json({
       status: authReady ? (mailReady ? 'ok' : 'degraded') : 'error',
       authReady,
       mailReady,
+      loginEmailReady,
+      loginEmailMode: checks.loginEmailTemplate ? 'template' : 'inline_fallback',
       checks,
     }, {
       status: authReady ? 200 : 503,
