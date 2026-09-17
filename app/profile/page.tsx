@@ -21,6 +21,7 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(true)
+  const [accountLoaded, setAccountLoaded] = useState(false)
 
   const [deletePassword, setDeletePassword] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
@@ -28,22 +29,44 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
-    fetch('/api/auth/me', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.user) {
+    let cancelled = false
+
+    async function loadProfile() {
+      try {
+        const res = await fetch('/api/auth/me', { cache: 'no-store' })
+        const data = await res.json().catch(() => ({}))
+        if (cancelled) return
+
+        if (res.status === 401 || (res.ok && !data.user)) {
           router.push('/login')
           return
         }
+
+        if (!res.ok) {
+          setError(data.error || 'Account service is temporarily unavailable. Please try again.')
+          return
+        }
+
         setName(data.user.name || '')
         setEmail(data.user.email || '')
         setRole(data.user.role || 'user')
         setUsername(data.user.username || '')
         setPhone(data.user.phone || '')
         setShowFullName(data.user.showFullName ?? false)
-      })
-      .catch(() => router.push('/login'))
-      .finally(() => setFetching(false))
+        setAccountLoaded(true)
+      } catch {
+        if (!cancelled) {
+          setError('Account service is temporarily unavailable. Please try again.')
+        }
+      } finally {
+        if (!cancelled) setFetching(false)
+      }
+    }
+
+    void loadProfile()
+    return () => {
+      cancelled = true
+    }
   }, [router])
 
   async function handleSubmit(e: FormEvent) {
@@ -57,14 +80,14 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, username, phone, showFullName }),
       })
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         setError(data.error || 'Update failed')
       } else {
         setSuccess('Profile updated')
       }
     } catch {
-      setError('Something went wrong')
+      setError('Unable to update your profile right now.')
     } finally {
       setLoading(false)
     }
@@ -112,6 +135,26 @@ export default function ProfilePage() {
         <SiteHeader />
         <main className="flex flex-1 items-center justify-center px-4 py-16">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </main>
+        <SiteFooter />
+      </div>
+    )
+  }
+
+  if (!accountLoaded) {
+    return (
+      <div className="flex min-h-svh flex-col">
+        <SiteHeader />
+        <main className="flex flex-1 items-center justify-center px-4 py-16">
+          <div className="max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+            <h1 className="font-heading text-2xl text-foreground">Account temporarily unavailable</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {error || 'We could not load your account right now. Your session has not been discarded.'}
+            </p>
+            <Button className="mt-5 rounded-full" onClick={() => window.location.reload()}>
+              Try again
+            </Button>
+          </div>
         </main>
         <SiteFooter />
       </div>
