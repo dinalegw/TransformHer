@@ -12,14 +12,17 @@ export const DEFAULT_LOGIN_NOTIFICATION_TEMPLATE_ID =
   COURIER_TEMPLATE_IDS.COURIER_TEMPLATE_LOGIN_NOTIFICATION || 'nt_01m2qga613e48rk85s854qc59r'
 
 export function getCourierTemplateId(key: string): string {
-  // Prefer the manifest generated from Courier during the Vercel build. This
-  // prevents stale/blank legacy template environment variables from silently
-  // overriding a template that the build has already verified and published.
   const generated = COURIER_TEMPLATE_IDS[key]?.trim()
-  if (generated) return generated
-
   const configured = process.env[key]?.trim()
+
+  // Vercel builds generate and verify this manifest directly from the connected
+  // Courier workspace before Next.js bundles the application. Prefer those
+  // verified IDs in Vercel so stale legacy environment values cannot override
+  // repaired templates. Outside Vercel, explicit environment values remain
+  // useful for tests and local development.
+  if (process.env.VERCEL && generated) return generated
   if (configured) return configured
+  if (generated) return generated
 
   throw new CourierEmailError(`[courier] ${key} is not configured`)
 }
