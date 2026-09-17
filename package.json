@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/ensure-courier-templates.mjs && next build",
+    "build": "node scripts/audit-courier-sender.mjs && node scripts/ensure-courier-templates.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
@@ -31,7 +31,7 @@
     "next": "^16",
     "pg": "^8.22.0",
     "react": "^19",
-    "react-dom": "^19",
+    "react-dom": "^19.2.0",
     "server-only": "^0.0.1",
     "shadcn": "^4.8.0",
     "tailwind-merge": "^3.3.1",
