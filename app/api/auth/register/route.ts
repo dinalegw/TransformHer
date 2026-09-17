@@ -37,17 +37,19 @@ function formError(req: Request, message: string) {
   return NextResponse.redirect(url, 303)
 }
 
+function clearAuthCookies(response: NextResponse) {
+  // Registration is never an authentication action. Clear both current and
+  // legacy cookie names so every response mode has the same security behavior.
+  response.cookies.delete('session')
+  response.cookies.delete('transformher_session')
+  return response
+}
+
 function signupSuccess(req: Request, mailSent: boolean) {
   const url = new URL('/signup', req.url)
   url.searchParams.set('created', '1')
   url.searchParams.set('mail', mailSent ? 'sent' : 'failed')
-  const response = NextResponse.redirect(url, 303)
-
-  // Registration must never silently inherit or create an authenticated session.
-  // Clearing both names also removes legacy cookies left by older deployments.
-  response.cookies.delete('session')
-  response.cookies.delete('transformher_session')
-  return response
+  return clearAuthCookies(NextResponse.redirect(url, 303))
 }
 
 export async function POST(req: Request) {
@@ -94,7 +96,7 @@ export async function POST(req: Request) {
     }
 
     if (htmlForm) return signupSuccess(req, verificationEmailSent)
-    return NextResponse.json({ user, verificationEmailSent }, { status: 201 })
+    return clearAuthCookies(NextResponse.json({ user, verificationEmailSent }, { status: 201 }))
   } catch (err) {
     console.error('Registration error:', err)
 
