@@ -29,7 +29,25 @@ const headers = {
   'Content-Type': 'application/json',
 }
 
-const text = (content, options = {}) => ({ type: 'text', content, ...options })
+const text = (content, options = {}) => {
+  const { color, bold, italic, strikethrough, underline, ...blockOptions } = options
+  const inlineStyle = {}
+  if (color !== undefined) inlineStyle.color = color
+  if (bold !== undefined) inlineStyle.bold = bold
+  if (italic !== undefined) inlineStyle.italic = italic
+  if (strikethrough !== undefined) inlineStyle.strikethrough = strikethrough
+  if (underline !== undefined) inlineStyle.underline = underline
+
+  if (Object.keys(inlineStyle).length > 0) {
+    return {
+      type: 'text',
+      ...blockOptions,
+      elements: [{ type: 'string', content, ...inlineStyle }],
+    }
+  }
+
+  return { type: 'text', content, ...blockOptions }
+}
 const heading = (content) => text(content, { text_style: 'h1', color: BRAND.ink, bold: true })
 const eyebrow = (content) => text(content, { text_style: 'subtext', color: BRAND.gold, bold: true })
 const muted = (content) => text(content, { text_style: 'subtext', color: BRAND.muted })
