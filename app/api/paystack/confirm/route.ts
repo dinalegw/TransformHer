@@ -3,12 +3,23 @@ import { getCurrentUser } from '@/lib/auth'
 import { getBookBySlug } from '@/lib/books'
 import { getLibraryItem, recordPurchase } from '@/lib/library'
 import { verifyPaystackPayment } from '@/lib/paystack'
+import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
+import { formatPrice } from '@/lib/format'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 function isReference(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,160}$/.test(value)
 }
 
 export async function POST(req: Request) {
+  const rateLimit = checkRateLimit(req, '/api/paystack/confirm')
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
+    )
+  }
+
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -38,7 +49,29 @@ export async function POST(req: Request) {
     }
 
     const existing = await getLibraryItem(user.id, book.id)
-    if (!existing) await recordPurchase(user.id, book.id, book.slug, payment.reference)
+    if (!existing) {
+      await recordPurchase(user.id, book.id, book.slug, payment.reference)
+
+      const amount = formatPrice(Number(payment.amount) / 100, payment.currency ?? book.currency)
+      const customerName = payment.customer?.first_name
+        ? `${payment.customer.first_name} ${payment.customer.last_name ?? ''}`.trim()
+        : user.name
+
+      try {
+        await sendPurchaseConfirmation(user.email, customerName, book.title, amount)
+      } catch (emailError) {
+        console.error('[paystack] purchase confirmation email failed', emailError)
+      }
+
+      const adminEmail = process.env.ADMIN_EMAIL
+      if (adminEmail) {
+        try {
+          await sendAdminOrderNotification(adminEmail, user.email, customerName, book.title, amount)
+        } catch (emailError) {
+          console.error('[paystack] admin order email failed', emailError)
+        }
+      }
+    }
 
     return NextResponse.json({ success: true, alreadyRecorded: Boolean(existing) })
   } catch (error) {
