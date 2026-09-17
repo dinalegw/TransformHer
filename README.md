@@ -1,35 +1,238 @@
 # TransformHer
 
-TransformHer is a Next.js ebook commerce platform for discovering books, paying with Paystack, managing a personal library, and operating a role-based admin dashboard.
+TransformHer is a production-oriented digital bookstore and reading platform for women. It combines account management, a protected personal library, Paystack payments, Courier transactional email, role-based administration, account lifecycle controls, and audited compliance tooling.
 
-## Stack
+**Production:** https://transformher.vercel.app  
+**Official support / reply-to:** `transformher360@gmail.com`
 
-- Next.js 16, React 19, TypeScript, Tailwind CSS
-- PostgreSQL/Neon with Drizzle ORM
-- Paystack for payment initialization and server-side verification
-- Courier for transactional email orchestration
-- Vercel Blob for uploads in production
+## Current project state
 
-## Product capabilities
+TransformHer is no longer the original catalogue-only MVP. The current codebase includes production hardening across authentication, email delivery, payments, user lifecycle management, compliance evidence, scaling, and admin operations.
 
-- Account registration, sign-in, email verification, password reset, and profile updates
-- Book catalogue, cart, Paystack checkout, delayed library release, and protected reader endpoint
-- Admin catalogue management, approval workflow, order review, user roles, and permissions
-- Input validation, rate limiting, security headers, request IDs, and CI checks
+At the latest repository audit on 17 September 2026:
+
+- `main` passes install, TypeScript, ESLint, Vitest, and production-build CI.
+- The stable production hostname is `https://transformher.vercel.app`.
+- Production customer email links are forced to the stable public hostname instead of an immutable `VERCEL_URL` deployment hostname.
+- Courier uses the TransformHer sender identity and `transformher360@gmail.com` as the official support / reply-to address.
+- The newest email-verification-code workflow is present on `main`. A Vercel Hobby build-rate limit can temporarily cause production to lag behind `main`; always verify the latest production deployment before declaring a feature live.
+
+## Technology stack
+
+- **Framework:** Next.js 16, React 19, TypeScript
+- **UI:** Tailwind CSS, Base UI / shadcn primitives, Lucide icons
+- **Database:** PostgreSQL / Neon with Drizzle ORM
+- **Payments:** Paystack
+- **Transactional email:** Courier
+- **File storage:** Vercel Blob in production
+- **Hosting / routing:** Vercel
+- **Testing:** Vitest, TypeScript, ESLint, production build checks
+
+## Core product capabilities
+
+### Customer accounts and authentication
+
+- Account registration with validation and duplicate-email protection
+- Registration does **not** automatically sign the new user in
+- Signed, stateless session cookies so any healthy Vercel instance can validate a session
+- Login and logout with shared rate limiting
+- Password reset links that:
+  - use the canonical TransformHer production hostname
+  - expire after one hour
+  - are signed
+  - are bound to the account's current `tokenVersion`
+  - become invalid after a successful reset
+- Registration email-verification links
+- Profile-based six-digit email verification flow for users who skipped verification during signup
+- Verified email shown as **Verified & locked**
+- Profile API does not expose a normal email-edit operation
+- Frozen and archived users are prevented from receiving normal authenticated sessions
+- A correctly authenticated frozen/archived user receives a controlled account-status message and support contact instead of a misleading "wrong email or password" response
+
+### Six-digit profile email verification
+
+The profile verification workflow is designed for horizontally scaled/serverless execution:
+
+- cryptographically generated 6-digit code
+- only a HMAC/hash of the code is stored
+- 10-minute expiration
+- 60-second resend cooldown
+- maximum 5 incorrect attempts
+- issuing a new code replaces the previous code
+- code is bound to the authenticated user ID
+- successful verification atomically marks the email verified and removes the code
+- same-origin checks and shared rate limiting protect request and confirmation routes
+
+### Books, commerce and library
+
+- Book catalogue and detail pages
+- Cart
+- Paystack checkout initialization
+- Server-side Paystack verification
+- Ownership, amount, currency, metadata and idempotency checks
+- Purchase confirmation email
+- Delayed-release books
+- Protected personal library
+- Protected reader access for entitled users
+- Book-release email notification
+
+### Admin and Master Admin
+
+The administrative system includes role/rank/permission controls and account lifecycle operations.
+
+Master Admin can:
+
+- freeze / unfreeze an account
+- archive / restore an account
+- delete a non-master user
+- review deleted-account archives
+- inspect retained transaction references where permitted
+- place or release a legal hold using a documented case/lawful-request reference
+
+Admins also have catalogue management, pending-change approval/rejection, order visibility and user-management tooling according to their permissions.
+
+### Self-service account deletion
+
+A signed-in non-master user can delete their own account from **Profile → Danger Zone**.
+
+The flow requires:
+
+- a written deletion reason
+- current password re-authentication
+- typing `DELETE`
+- final confirmation
+
+The active account is removed and the user is signed out. A restricted archive is created first for narrowly defined retention purposes such as payment disputes, fraud prevention, accounting, security investigations, legal claims and lawful requests.
+
+## Deleted-account compliance archive
+
+Deleted accounts automatically appear in the Master Admin deleted-account dashboard.
+
+Retained archive data can include:
+
+- original user ID
+- name and email
+- optional username / phone
+- email-verification state
+- account-created and account-deleted timestamps
+- deletion method and reason
+- account status at deletion
+- limited retained purchase references
+- configured retention expiry
+- legal-hold state / reference
+- successful authenticated access evidence recorded after the access-history feature was deployed
+
+### Authenticated access evidence
+
+For successful sign-ins, TransformHer can retain security evidence consisting of:
+
+- access timestamp
+- observed IP address
+- browser / device summary
+- user-agent string
+- coarse city / country where supplied by the hosting platform
+
+When an account is deleted, those successful-login records are copied into the restricted deleted-account archive before the active account is removed.
+
+TransformHer does **not** intentionally archive passwords, session cookies, reset tokens, verification tokens, API secrets or payment credentials.
+
+An IP address is network evidence, not proof of a person's identity. It can represent a VPN, proxy, carrier gateway, NAT or shared network.
+
+Access to retained personal, purchase or access-security evidence requires a documented purpose and is written to the compliance audit trail.
+
+## Account lifecycle notifications
+
+Courier transactional notifications cover the active account lifecycle, including:
+
+- Welcome & Verify Email
+- Email Verification Code
+- Email Verified
+- Verify New Email
+- Password Reset
+- Password Reset Confirmation
+- Password Changed
+- Login Notification
+- Security Alert
+- Invitation
+- Account Frozen
+- Account Archived
+- Account Unfrozen
+- Account Unarchived
+- Order Confirmation
+- Book Released
+- Admin Order Notification
+
+The build-time Courier synchronizer verifies managed templates, routing and provider-backed email channels in the connected Courier Production workspace.
+
+Courier request acceptance is **not** treated as guaranteed inbox delivery. Critical flows can inspect Courier message status so immediate routing/provider failures are not presented to users as successful delivery.
+
+## Courier branding
+
+The managed TransformHer Courier templates use the application's black / cream / muted-gold visual language with logo/hero image blocks where appropriate, branded headings, CTAs and support information.
+
+The expected public sender identity is:
+
+```text
+TransformHer <transformher360@gmail.com>
+```
+
+The Gmail provider configuration and the application-level email override should agree on that identity.
 
 ## Architecture
 
-`app/` contains pages and route handlers. `lib/` contains server-only domain logic:
+```text
+User
+  |
+  v
+Vercel Edge / Function Router
+  |
+  v
+Healthy TransformHer function instance
+  |
+  +--> Neon PostgreSQL (shared persistent state)
+  +--> Courier (transactional email)
+  +--> Paystack (payments)
+  +--> Vercel Blob (production uploads)
+```
 
-- `auth.ts` — signed sessions, password hashing, user and role management
-- `books.ts`, `library.ts`, `admin-books.ts` — catalogue, purchases, cart, and admin workflow
-- `paystack.ts` — payment provider client
-- `email.ts` — Courier notification client
-- `db/schema.ts` — Drizzle schema and indexes
+Important architectural decisions:
+
+- sessions are stateless signed cookies
+- application-level sticky sessions are not required
+- rate-limit and login-notification deduplication state is shared rather than authoritative process-local memory
+- production database access prefers pooled connections
+- Vercel handles platform-level traffic distribution / autoscaling
+- customer-facing transactional links use a canonical public hostname
+
+Classic round-robin or sticky-session logic is intentionally not reimplemented inside the Next.js application because the platform router already distributes requests and the application is designed to remain instance-independent.
+
+## Repository architecture
+
+`app/` contains pages and route handlers. `lib/` contains the domain and infrastructure layer.
+
+Important modules include:
+
+- `lib/auth.ts` — users, password hashing, signed sessions, roles and email-verification state
+- `lib/password-reset.ts` — single-use password-reset token lifecycle
+- `lib/email-verification-code.ts` — six-digit profile verification codes
+- `lib/email.ts` — Courier client and transactional email sends
+- `lib/account-lifecycle.ts` — freeze, archive, restore and controlled deletion workflows
+- `lib/access-history.ts` — successful authenticated access evidence
+- `lib/compliance.ts` — deleted-account review, audit trail, retention and legal holds
+- `lib/rate-limit.ts` — shared rate limiting
+- `lib/books.ts`, `lib/library.ts`, `lib/admin-books.ts` — catalogue, purchases and admin workflows
+- `lib/paystack.ts` — Paystack provider client
+- `lib/db/schema.ts` — Drizzle schema
+- `lib/db/connection.ts` — database connection and compatibility initialization
+- `scripts/ensure-courier-templates.mjs` — production Courier template/routing synchronization
+- `scripts/audit-courier-sender.mjs` — sender/provider identity audit
 
 ## Local setup
 
-Requirements: Node.js 20.19+ and a PostgreSQL-compatible database.
+Requirements:
+
+- Node.js `>=20.19.0`
+- PostgreSQL-compatible database
 
 ```bash
 npm ci
@@ -40,85 +243,106 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Required environment variables
+## Environment configuration
 
-Set these in `.env.local` for development and in Vercel for Production, Preview, and Development as appropriate:
+Use `.env.example` as the source of truth.
+
+Core variables include:
 
 ```bash
 AUTH_SECRET=long-random-secret
-POSTGRES_URL_NON_POOLING=postgres://...
-POSTGRES_URL=postgres://...
+EMAIL_VERIFICATION_SECRET=optional-separate-verification-secret
+
+POSTGRES_URL=postgres://pooled-connection
+POSTGRES_URL_NON_POOLING=postgres://direct-connection
+
 PAYSTACK_SECRET_KEY=sk_...
 NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=pk_...
+
 COURIER_API_KEY=...
-ADMIN_EMAIL=admin@example.com
-ADMIN_PASSWORD=use-a-unique-long-password
+
+ADMIN_EMAIL=...
+ADMIN_PASSWORD=...
+
+BLOB_READ_WRITE_TOKEN=...
+
+TRANSFORMHER_PUBLIC_URL=https://transformher.vercel.app
 NEXT_PUBLIC_BASE_URL=http://localhost:3000
 ```
 
-Every `COURIER_TEMPLATE_*` variable in `.env.example` is required only if the corresponding email is sent. Keep all templates published and use IDs from the same Courier environment as `COURIER_API_KEY`.
+Courier template variables are documented in `.env.example`, including the email-verification-code and account-lifecycle templates.
 
-`ADMIN_PASSWORD` is only used to create the initial admin account. It is never safe to rely on a default password; no default is provided. Existing admin passwords are not reset at startup.
+`TRANSFORMHER_PUBLIC_URL` is the preferred explicit public URL. In Production, the application also falls back to Vercel's stable project production URL and finally `https://transformher.vercel.app`; it does not use an immutable `VERCEL_URL` for customer reset/verification links.
 
-## Courier email: required setup
+`ADMIN_PASSWORD` is used only to create the initial administrator when required. Existing administrator passwords are not reset at startup.
 
-An accepted Courier request is not proof of delivery. Courier can accept a request and later show `UNMAPPED` when no active email provider/routing rule can handle it.
+## Security model
 
-1. In the selected Courier environment, connect an email provider (for example Resend) and verify its sending domain.
-2. Open Courier’s email channel/routing settings and make the connected provider the active route for email. `UNMAPPED` means this mapping is missing or inactive.
-3. Publish each template used by the app. Copy its template ID into the matching `COURIER_TEMPLATE_*` variable.
-4. Add `COURIER_API_KEY` and those template variables to Vercel, then redeploy.
-5. Trigger a password-reset email and inspect Courier’s message event timeline. Record the application log’s Courier request ID; use it to distinguish accepted, delivered, bounced, and undeliverable messages.
+- Passwords are stored as salted password hashes, never plaintext.
+- Session cookies are signed and validated against `tokenVersion`.
+- Password changes and account lifecycle restrictions invalidate existing sessions by incrementing `tokenVersion`.
+- Password-reset tokens expire and become unusable after a successful reset.
+- Email verification codes are stored hashed, not plaintext.
+- Sensitive authentication values are excluded from application logs.
+- Shared rate limiting protects authentication and other high-risk endpoints.
+- Self-service deletion requires re-authentication and explicit confirmation.
+- Retained deleted-account evidence is gated by documented compliance purpose.
+- Payment entitlements are granted only after server-side Paystack verification.
 
-Do not mix keys or template IDs from different Courier environments. The repository’s template helper currently creates only a subset of templates, so create or configure the remaining template IDs manually before enabling every notification type.
+## Storage warning
 
-## Security notes
+Do not store paid ebooks in `public/` or commit them into the public repository.
 
-- Entitlements are granted only after server-side Paystack verification; client data is never trusted.
-- The Paystack callback checks payment status, owner, customer email, exact amount, currency, and expected book/cart metadata.
-- Do not store paid ebooks in `public/` or a public Git repository. Public Vercel Blob URLs are not access-controlled; use a private storage provider or signed, short-lived download URLs before treating content as protected.
-- Uploaded files are intentionally ignored from Git. Existing public upload URLs should be rotated or removed.
-- Run database migrations before deploying schema changes. Do not use `db:push` as a production migration workflow.
+Production uploads require persistent storage. Configure `BLOB_READ_WRITE_TOKEN` for Vercel Blob or use another private storage system with access-controlled / short-lived download URLs before treating paid content as fully protected.
 
-## Database and account deletion
+## Quality gates
 
-The application persists user accounts, passwords, roles, sessions, carts, purchases, and verification records in PostgreSQL using Drizzle ORM. Configure `POSTGRES_URL_NON_POOLING` (or `POSTGRES_URL`) in Vercel, then run `npm run db:migrate` once against that database.
-
-The master administrator can permanently delete a non-master user from the Admin dashboard. This removes the account and its sessions, cart, purchases, linked account data, verification records, and pending changes. The operation is irreversible; the person must register again to use TransformHer.
-
-The catalogue is fictional sample content. The example prices are in NGN and are updated by migration `0002_update_sample_book_prices.sql`; change them in the Admin dashboard before offering real products for sale.
-
-## Quality checks
+Run the same core checks used by CI:
 
 ```bash
+npm ci
 npm run typecheck
 npm run lint
 npm test
 npm run build
 ```
 
-## Scripts
+Current scripts:
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Development server |
-| `npm run build` / `npm run start` | Production build and server |
-| `npm run db:generate` | Generate a Drizzle migration |
+| `npm run dev` | Start local Next.js development |
+| `npm run build` | Audit Courier sender, synchronize Courier templates, build Next.js |
+| `npm run start` | Start the production server |
+| `npm run typecheck` | TypeScript check without emit |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest suite |
+| `npm run db:generate` | Generate Drizzle migration |
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:studio` | Open Drizzle Studio |
-| `npm run typecheck`, `lint`, `test` | Quality gates |
+| `npm run db:push` | Drizzle push — development only; do not use as the normal production migration workflow |
 
-## Deployment checklist
+## Production verification checklist
 
-1. Configure all required production variables in Vercel.
-2. Run and verify migrations against production safely.
-3. Complete a real Paystack test payment and confirm one library record only.
-4. Test Courier delivery—not merely enqueueing—from the correct Courier environment.
-5. Verify non-admin, admin, and master-admin access paths.
+Before declaring a release complete, verify the actual production behavior rather than only a successful build:
 
-## Engineering master prompt
+1. Registration creates one account, does not auto-login, and sends a valid public-domain verification link.
+2. Profile verification sends a six-digit code and correctly transitions to **Verified & locked**.
+3. Forgot-password sends a reset URL under `transformher.vercel.app`, not an immutable Vercel deployment URL.
+4. A used/expired reset link cannot be replayed.
+5. A successful login creates one session and one deduplicated login notification.
+6. Frozen / archived users receive the correct account-status behavior.
+7. Self-delete archives permitted evidence and removes the active account.
+8. Deleted-account access evidence is visible only through documented/audited Master Admin review.
+9. Paystack test checkout creates exactly one entitlement.
+10. Paid content remains inaccessible without the required entitlement/release state.
+11. Courier message events show routing/provider success for critical email flows.
+12. Production runtime logs contain no unexplained 5xx clusters.
 
-Use [docs/MASTER_PROMPT.md](docs/MASTER_PROMPT.md) for hardening, provider setup, verification, and handoff requirements.
+## Engineering documentation
+
+- [`docs/MASTER_PROMPT.md`](docs/MASTER_PROMPT.md) — general TransformHer engineering/hardening contract
+- [`docs/AUTH_RECOVERY_MASTER_PROMPT.md`](docs/AUTH_RECOVERY_MASTER_PROMPT.md) — password recovery and email verification production contract
 
 ## License
 
