@@ -6,7 +6,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function DELETE(req: Request) {
   try {
-    const rate = checkRateLimit(req, '/api/account/delete')
+    const rate = await checkRateLimit(req, '/api/account/delete')
     if (!rate.allowed) {
       return NextResponse.json(
         { error: 'Too many requests', retryAfter: rate.retryAfter },
