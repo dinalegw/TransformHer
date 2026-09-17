@@ -12,7 +12,7 @@ function isReference(value: unknown): value is string {
 }
 
 export async function POST(req: Request) {
-  const rateLimit = checkRateLimit(req, '/api/cart/checkout/confirm')
+  const rateLimit = await checkRateLimit(req, '/api/cart/checkout/confirm')
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
@@ -89,7 +89,6 @@ export async function POST(req: Request) {
         await recordPurchase(user.id, book.id, book.slug, payment.reference)
         newlyRecorded.push(book)
       }
-      // Removing a missing cart row is harmless and makes retries idempotent.
       await removeFromCart(user.id, book.id)
     }
 
