@@ -1,5 +1,6 @@
 import Courier from '@trycourier/courier'
 import { COURIER_TEMPLATE_IDS } from '@/lib/courier-template-manifest'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
 export class CourierEmailError extends Error {
   constructor(message: string) {
@@ -80,8 +81,15 @@ async function sendMessage(
       message: {
         to: { email: to },
         template: templateId,
-        data,
+        data: { ...data, supportEmail: SUPPORT_EMAIL },
         routing: { method: 'single', channels: ['email'] },
+        channels: {
+          email: {
+            override: {
+              reply_to: SUPPORT_EMAIL,
+            },
+          },
+        },
       },
     })
     console.info(`[courier] accepted:${label}`, { requestId: res.requestId })
@@ -195,6 +203,42 @@ export async function sendSecurityAlert(to: string, name: string, alertType: str
 
 export async function sendInvitationEmail(to: string, name: string, inviteLink: string, inviterName: string) {
   return sendMessage(to, getCourierTemplateId('COURIER_TEMPLATE_INVITATION'), { name, inviteLink, inviterName }, 'invitation')
+}
+
+export async function sendAccountFrozenEmail(to: string, name: string, reason?: string) {
+  return sendMessage(
+    to,
+    getCourierTemplateId('COURIER_TEMPLATE_ACCOUNT_FROZEN'),
+    { name, reason: reason || 'Your account has been temporarily frozen.' },
+    'account_frozen',
+  )
+}
+
+export async function sendAccountArchivedEmail(to: string, name: string) {
+  return sendMessage(
+    to,
+    getCourierTemplateId('COURIER_TEMPLATE_ACCOUNT_ARCHIVED'),
+    { name },
+    'account_archived',
+  )
+}
+
+export async function sendAccountUnfrozenEmail(to: string, name: string) {
+  return sendMessage(
+    to,
+    getCourierTemplateId('COURIER_TEMPLATE_ACCOUNT_UNFROZEN'),
+    { name },
+    'account_unfrozen',
+  )
+}
+
+export async function sendAccountUnarchivedEmail(to: string, name: string) {
+  return sendMessage(
+    to,
+    getCourierTemplateId('COURIER_TEMPLATE_ACCOUNT_UNARCHIVED'),
+    { name },
+    'account_unarchived',
+  )
 }
 
 export async function sendPurchaseConfirmation(to: string, name: string, bookTitle: string, amount: string) {
