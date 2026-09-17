@@ -15,6 +15,7 @@ import { getBookBySlug, getRelatedBooks } from '@/lib/books'
 import { formatPrice } from '@/lib/format'
 import { getCurrentUser } from '@/lib/auth'
 import { getCartItem, getLibraryItem, fetchLibrary } from '@/lib/library'
+import { safeImageSrc } from '@/lib/utils'
 
 export async function generateMetadata({
   params,
@@ -68,7 +69,7 @@ export default async function BookDetailPage({
             <div className="mx-auto w-full max-w-xs md:mx-0">
               <div className="relative aspect-[2/3] overflow-hidden rounded-xl shadow-2xl ring-1 ring-border">
                 <Image
-                  src={book.coverImage || '/placeholder.svg'}
+                  src={safeImageSrc(book.coverImage)}
                   alt={`Cover of ${book.title} by ${book.author}`}
                   fill
                   priority
