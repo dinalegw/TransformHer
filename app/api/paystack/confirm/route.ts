@@ -12,7 +12,7 @@ function isReference(value: unknown): value is string {
 }
 
 export async function POST(req: Request) {
-  const rateLimit = checkRateLimit(req, '/api/paystack/confirm')
+  const rateLimit = await checkRateLimit(req, '/api/paystack/confirm')
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
