@@ -7,6 +7,16 @@ export class CourierEmailError extends Error {
   }
 }
 
+// This template is a real published Courier notification created in the same
+// workspace as COURIER_API_KEY. Vercel may override it with the environment
+// variable without requiring another code change.
+export const DEFAULT_LOGIN_NOTIFICATION_TEMPLATE_ID = 'nt_01m2qga613e48rk85s854qc59r'
+
+export function getLoginNotificationTemplateId(): string {
+  return process.env.COURIER_TEMPLATE_LOGIN_NOTIFICATION?.trim()
+    || DEFAULT_LOGIN_NOTIFICATION_TEMPLATE_ID
+}
+
 let client: Courier | null = null
 
 function getClient(): Courier {
@@ -65,28 +75,6 @@ async function sendMessage(
   }
 }
 
-async function sendInlineEmail(
-  to: string,
-  title: string,
-  body: string,
-  label: string,
-): Promise<void> {
-  try {
-    console.info(`[courier] send_inline:${label}`, { to })
-    const res = await getClient().send.message({
-      message: {
-        to: { email: to },
-        content: { title, body },
-        routing: { method: 'single', channels: ['email'] },
-      },
-    })
-    console.info(`[courier] accepted:${label}`, { requestId: res.requestId, mode: 'inline' })
-  } catch (error) {
-    console.error(`[courier] send_failed:${label}`, { to, mode: 'inline', error })
-    throw new CourierEmailError(`Courier ${label} failed: ${error instanceof Error ? error.message : error}`)
-  }
-}
-
 export async function sendPasswordResetEmail(to: string, resetLink: string) {
   return sendMessage(to, getTemplate('COURIER_TEMPLATE_PASSWORD_RESET'), { resetLink }, 'password_reset')
 }
@@ -112,29 +100,10 @@ export async function sendVerifyNewEmailEmail(to: string, name: string, verifyLi
 }
 
 export async function sendLoginNotification(to: string, name: string, location?: string, device?: string) {
-  const templateId = process.env.COURIER_TEMPLATE_LOGIN_NOTIFICATION
-  const data = { name, location, device }
-
-  if (templateId) {
-    return sendMessage(to, templateId, data, 'login_notification')
-  }
-
-  // Keep login notifications operational even when a deployment is missing the
-  // optional template variable. Courier supports inline content for email.
-  const context = [location ? `Location: ${location}` : null, device ? `Device: ${device}` : null]
-    .filter(Boolean)
-    .join('\n')
-  const body = [
-    `Hi ${name},`,
-    'A new sign-in to your TransformHer account was detected.',
-    context || null,
-    'If this was you, no action is required. If not, reset your password immediately.',
-  ].filter(Boolean).join('\n\n')
-
-  return sendInlineEmail(
+  return sendMessage(
     to,
-    'New sign-in to your TransformHer account',
-    body,
+    getLoginNotificationTemplateId(),
+    { name, location, device },
     'login_notification',
   )
 }
