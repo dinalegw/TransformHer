@@ -46,12 +46,25 @@ export async function POST(req: Request) {
     try {
       await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
     } catch (err) {
+      // Account creation/session issuance must remain successful even if Courier is unavailable.
       console.error('Failed to send welcome email:', err)
     }
 
     return res
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 409 })
+    console.error('Registration error:', err)
+
+    if (err instanceof Error && err.message === 'An account with this email already exists') {
+      return NextResponse.json({ error: err.message }, { status: 409 })
+    }
+
+    if (err instanceof Error && err.message === 'Database not available') {
+      return NextResponse.json(
+        { error: 'Account creation is temporarily unavailable. Please try again.' },
+        { status: 503 },
+      )
+    }
+
+    return NextResponse.json({ error: 'Unable to create account right now.' }, { status: 500 })
   }
 }
