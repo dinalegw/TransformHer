@@ -8,6 +8,15 @@ export class CourierEmailError extends Error {
   }
 }
 
+export interface CourierSendReceipt {
+  requestId: string
+}
+
+export interface CourierDispatchState {
+  state: 'sent' | 'failed' | 'pending'
+  status: string | null
+}
+
 export const DEFAULT_LOGIN_NOTIFICATION_TEMPLATE_ID =
   COURIER_TEMPLATE_IDS.COURIER_TEMPLATE_LOGIN_NOTIFICATION || 'nt_01m2qga613e48rk85s854qc59r'
 
@@ -33,14 +42,16 @@ export function getLoginNotificationTemplateId(): string {
 
 let client: Courier | null = null
 
+function getApiKey(): string {
+  const apiKey = process.env.COURIER_API_KEY
+  if (!apiKey) throw new CourierEmailError('[courier] COURIER_API_KEY is not configured')
+  return apiKey
+}
+
 function getClient(): Courier {
   if (!client) {
-    const apiKey = process.env.COURIER_API_KEY
-    if (!apiKey) {
-      throw new CourierEmailError('[courier] COURIER_API_KEY is not configured')
-    }
     client = new Courier({
-      apiKey,
+      apiKey: getApiKey(),
       timeout: 30_000,
       maxRetries: 2,
     })
@@ -58,7 +69,7 @@ async function sendMessage(
   templateId: string,
   data: Record<string, unknown>,
   label: string,
-): Promise<void> {
+): Promise<CourierSendReceipt> {
   try {
     console.info(`[courier] send:${label}`, {
       recipientDomain: recipientDomain(to),
@@ -74,6 +85,7 @@ async function sendMessage(
       },
     })
     console.info(`[courier] accepted:${label}`, { requestId: res.requestId })
+    return { requestId: res.requestId }
   } catch (error) {
     console.error(`[courier] send_failed:${label}`, {
       recipientDomain: recipientDomain(to),
@@ -83,6 +95,65 @@ async function sendMessage(
     })
     throw new CourierEmailError(`Courier ${label} failed: ${error instanceof Error ? error.message : error}`)
   }
+}
+
+async function readCourierMessageStatus(messageId: string): Promise<string | null> {
+  const response = await fetch(`https://api.courier.com/messages/${encodeURIComponent(messageId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${getApiKey()}`,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new CourierEmailError(`Courier message status lookup failed (${response.status})`)
+  }
+
+  const body = await response.json() as { status?: unknown }
+  return typeof body.status === 'string' ? body.status.toUpperCase() : null
+}
+
+const SUCCESS_STATUSES = new Set(['SENT', 'DELIVERED', 'OPENED', 'CLICKED'])
+const FAILURE_STATUSES = new Set(['UNROUTABLE', 'UNDELIVERABLE', 'FAILED', 'CANCELED', 'CANCELLED'])
+
+/**
+ * A successful Courier send call only means the request was accepted. For
+ * critical account emails we briefly poll Courier so we can distinguish an
+ * accepted request from an immediate provider/routing failure and avoid telling
+ * the user an email was sent when Courier already knows it was not.
+ */
+export async function waitForCourierDispatch(
+  messageId: string,
+  attempts = 4,
+): Promise<CourierDispatchState> {
+  let lastStatus: string | null = null
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, Math.min(1000, 250 * attempt)))
+    }
+
+    try {
+      lastStatus = await readCourierMessageStatus(messageId)
+    } catch (error) {
+      console.warn('[courier] status_check_failed', {
+        messageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return { state: 'pending', status: lastStatus }
+    }
+
+    if (lastStatus && SUCCESS_STATUSES.has(lastStatus)) {
+      return { state: 'sent', status: lastStatus }
+    }
+    if (lastStatus && FAILURE_STATUSES.has(lastStatus)) {
+      return { state: 'failed', status: lastStatus }
+    }
+  }
+
+  return { state: 'pending', status: lastStatus }
 }
 
 export async function sendPasswordResetEmail(to: string, resetLink: string) {
