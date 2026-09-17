@@ -1,6 +1,7 @@
 import { drizzle } from 'drizzle-orm/neon-serverless'
 import { sql } from 'drizzle-orm'
 import { Pool, type PoolConfig } from '@neondatabase/serverless'
+import { getDatabaseConnection, getDbPoolMaxPerInstance } from '@/lib/scaling'
 import * as schema from './schema'
 
 type Db = ReturnType<typeof drizzle<typeof schema>>
@@ -169,11 +170,7 @@ async function ensureLegacySchema(db: Db) {
 }
 
 function getConnectionUrl() {
-  return process.env.POSTGRES_URL_NON_POOLING
-    ?? process.env.POSTGRES_URL
-    ?? process.env.DATABASE_URL_UNPOOLED
-    ?? process.env.DATABASE_URL
-    ?? null
+  return getDatabaseConnection().url
 }
 
 function getPoolConfig(): PoolConfig {
@@ -181,17 +178,22 @@ function getPoolConfig(): PoolConfig {
   if (!url) return { connectionString: '', max: 0 }
   return {
     connectionString: url,
-    max: 1,
+    max: getDbPoolMaxPerInstance(),
     idleTimeoutMillis: 3000,
     connectionTimeoutMillis: 3000,
   }
 }
 
 async function tryConnect(): Promise<Db | null> {
-  const url = getConnectionUrl()
+  const connection = getDatabaseConnection()
+  const url = connection.url
   if (!url) {
     console.error('[db] No database connection URL is configured')
     return null
+  }
+
+  if (process.env.NODE_ENV === 'production' && !connection.pooledPreferred) {
+    console.warn(`[db] Using ${connection.source}; configure a pooled database URL for safer horizontal scaling`)
   }
 
   const pool = new Pool(getPoolConfig())
