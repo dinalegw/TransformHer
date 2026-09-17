@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { verifyResetToken, updatePassword, getUserNameByEmail } from '@/lib/auth'
+import { updatePassword, getUserNameByEmail } from '@/lib/auth'
+import { verifyPasswordResetToken } from '@/lib/password-reset'
 import { sendPasswordChangedEmail } from '@/lib/email'
 import { checkRateLimit } from '@/lib/rate-limit'
 
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
-        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
       )
     }
 
@@ -20,20 +21,34 @@ export async function POST(req: Request) {
     if (password.length < 8) {
       return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 })
     }
-    const email = verifyResetToken(token)
+    if (password.length > 128) {
+      return NextResponse.json({ error: 'Password must be at most 128 characters' }, { status: 400 })
+    }
+
+    const email = await verifyPasswordResetToken(token)
     if (!email) {
       return NextResponse.json({ error: 'Invalid or expired reset token' }, { status: 400 })
     }
-    await updatePassword(email, password)
+
+    const updated = await updatePassword(email, password)
+    if (!updated) {
+      return NextResponse.json({ error: 'Password reset is temporarily unavailable.' }, { status: 503 })
+    }
+
     try {
       const name = await getUserNameByEmail(email) ?? email.split('@')[0]
       await sendPasswordChangedEmail(email, name)
     } catch (err) {
       console.error('Failed to send password changed email:', err)
     }
+
     return NextResponse.json({ message: 'Password updated successfully' })
   } catch (err) {
     console.error('Reset password error:', err)
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+    const unavailable = err instanceof Error && err.message === 'Database not available'
+    return NextResponse.json(
+      { error: unavailable ? 'Password reset is temporarily unavailable.' : 'Something went wrong' },
+      { status: unavailable ? 503 : 500 },
+    )
   }
 }
