@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getDb } from '@/lib/db/connection'
+import { SCALING_POLICY, getDatabaseConnection, getDbPoolMaxPerInstance } from '@/lib/scaling'
 
 const REQUIRED_VARS = [
   'AUTH_SECRET',
@@ -60,15 +61,24 @@ export async function GET() {
     note: db ? undefined : 'database unavailable',
   }
 
+  const databaseConnection = getDatabaseConnection()
+  const scalingReady = Boolean(db) && databaseConnection.pooledPreferred
   const coreReady = REQUIRED_VARS.every((key) => process.env[key])
     && Boolean(process.env.COURIER_API_KEY)
     && Boolean(db)
   const storageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 
   return NextResponse.json({
-    status: coreReady ? (storageReady ? 'ok' : 'degraded') : 'error',
+    status: coreReady ? (storageReady && scalingReady ? 'ok' : 'degraded') : 'error',
     coreReady,
     storageReady,
+    scalingReady,
+    scaling: {
+      ...SCALING_POLICY,
+      databaseConnectionSource: databaseConnection.source,
+      pooledDatabasePreferred: databaseConnection.pooledPreferred,
+      dbPoolMaxPerInstance: getDbPoolMaxPerInstance(),
+    },
     checks,
   }, {
     status: coreReady ? 200 : 503,
