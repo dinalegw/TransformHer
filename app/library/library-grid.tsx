@@ -6,6 +6,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BookOpen, Clock, EyeOff, Eye, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { safeImageSrc } from '@/lib/utils'
 
 interface BookInfo {
   id: number | string
@@ -55,7 +56,7 @@ export function LibraryGrid({ items }: { items: LibraryItemWithBook[] }) {
       if (!res.ok) throw new Error('Failed')
       router.refresh()
     } catch {
-      // silently fail
+      // Keep the existing item visible if the request fails; a later refresh can retry.
     } finally {
       setArchiving(null)
     }
@@ -101,7 +102,7 @@ export function LibraryGrid({ items }: { items: LibraryItemWithBook[] }) {
           <div key={bookId} className="group relative">
             <div className="relative aspect-[2/3] overflow-hidden rounded-lg bg-secondary shadow-sm ring-1 ring-border/60">
               <Image
-                src={book.coverImage || '/placeholder.svg'}
+                src={safeImageSrc(book.coverImage)}
                 alt={`Cover of ${book.title}`}
                 fill
                 sizes="(max-width: 768px) 50vw, 25vw"
