@@ -11,7 +11,7 @@ export async function POST(req: Request) {
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
-      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+      { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
     )
   }
 
@@ -20,44 +20,54 @@ export async function POST(req: Request) {
 
   try {
     const items = await fetchCart(user.id)
-    if (items.length === 0) {
-      return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
-    }
+    if (items.length === 0) return NextResponse.json({ error: 'Cart is empty' }, { status: 400 })
 
     const allBooks = await getAllMergedBooks()
+    const bookMap = new Map(allBooks.map((book) => [book.id, book]))
     const cartBooks = items
-      .map(i => allBooks.find(b => b.id === i.bookId))
-      .filter((b): b is NonNullable<typeof b> => b != null)
+      .map((item) => bookMap.get(item.bookId))
+      .filter((book): book is NonNullable<typeof book> => book != null)
 
-    if (cartBooks.length !== items.length || cartBooks.some(book => book.currency !== 'NGN')) {
+    if (cartBooks.length !== items.length || cartBooks.some((book) => book.currency !== 'NGN')) {
       return NextResponse.json({ error: 'Your cart contains unavailable or unsupported-currency books.' }, { status: 400 })
     }
 
-    const totalKobo = cartBooks.reduce((sum, b) => sum + Number(b.price), 0)
-    const reference = `CART-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
+    const expectedAmountMinor = cartBooks.reduce(
+      (sum, book) => sum + Math.round(Number(book.price) * 100),
+      0,
+    )
+    if (!Number.isSafeInteger(expectedAmountMinor) || expectedAmountMinor <= 0) {
+      return NextResponse.json({ error: 'Unable to calculate a valid cart total.' }, { status: 400 })
+    }
 
+    const reference = `CART-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
     const result = await initializePaystackPayment({
       email: user.email,
-    amount: totalKobo,
-    currency: 'NGN',
+      amount: expectedAmountMinor / 100,
+      currency: 'NGN',
       reference,
       metadata: {
         userId: user.id,
         cartCheckout: true,
-        bookIds: cartBooks.map(b => b.id),
-        bookSlugs: cartBooks.map(b => b.slug),
-        bookTitles: cartBooks.map(b => b.title),
+        bookIds: cartBooks.map((book) => book.id),
+        bookSlugs: cartBooks.map((book) => book.slug),
+        bookTitles: cartBooks.map((book) => book.title),
+        expectedAmountMinor,
+        expectedCurrency: 'NGN',
       },
       callback_url: `${getBaseUrl()}/cart?purchased=true`,
     })
 
-    if (!result.status || !result.data?.authorization_url) {
+    if (!result.status || !result.data?.authorization_url || !result.data.reference) {
       return NextResponse.json({ error: result.message ?? 'Paystack initialization failed' }, { status: 502 })
     }
 
-    return NextResponse.json({ authorization_url: result.data.authorization_url, reference })
+    return NextResponse.json({
+      authorization_url: result.data.authorization_url,
+      reference: result.data.reference,
+    })
   } catch (err) {
-    console.error('Checkout failed:', err)
-    return NextResponse.json({ error: 'Checkout failed' }, { status: 500 })
+    console.error('[checkout] initialization failed', err)
+    return NextResponse.json({ error: 'Unable to start checkout right now.' }, { status: 500 })
   }
 }
