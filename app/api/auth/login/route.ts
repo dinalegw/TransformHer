@@ -6,7 +6,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   try {
-    const rateLimit = checkRateLimit(req, '/api/auth/login')
+    const rateLimit = await checkRateLimit(req, '/api/auth/login')
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many login attempts', retryAfter: rateLimit.retryAfter },
