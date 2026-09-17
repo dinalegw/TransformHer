@@ -26,9 +26,7 @@ export async function POST(req: Request) {
     }
 
     const exists = await emailExists(normalizedEmail)
-    if (!exists) {
-      return NextResponse.json(message)
-    }
+    if (!exists) return NextResponse.json(message)
 
     const token = generateResetToken(normalizedEmail)
     const resetLink = `${getBaseUrl()}/reset-password?token=${token}`
@@ -36,13 +34,17 @@ export async function POST(req: Request) {
     try {
       await sendPasswordResetEmail(normalizedEmail, resetLink)
     } catch (emailErr) {
+      // Preserve account privacy and avoid turning email-provider errors into
+      // an account-enumeration signal for callers.
       console.error('Forgot password email failed to send:', emailErr)
     }
 
     return NextResponse.json(message)
   } catch (err) {
     console.error('Forgot password error:', err)
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Unable to process the password reset request right now.' },
+      { status: 500 },
+    )
   }
 }
