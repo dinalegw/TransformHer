@@ -125,7 +125,22 @@ async function ensureLegacySchema(db: Db) {
   );`))
 
   for (const statement of [
+    `CREATE INDEX IF NOT EXISTS "books_category_idx" ON "books"("category");`,
+    `CREATE INDEX IF NOT EXISTS "books_featured_idx" ON "books"("featured");`,
+    `CREATE INDEX IF NOT EXISTS "books_bestseller_idx" ON "books"("bestseller");`,
+    `CREATE INDEX IF NOT EXISTS "books_source_idx" ON "books"("source");`,
+    `CREATE INDEX IF NOT EXISTS "books_featured_bestseller_idx" ON "books"("featured","bestseller");`,
+    `CREATE INDEX IF NOT EXISTS "books_active_idx" ON "books"("deleted","archived");`,
+    `CREATE INDEX IF NOT EXISTS "purchases_user_idx" ON "user_purchases"("user_id");`,
+    `CREATE INDEX IF NOT EXISTS "purchases_book_idx" ON "user_purchases"("book_id");`,
+    `CREATE INDEX IF NOT EXISTS "purchases_slug_idx" ON "user_purchases"("book_slug");`,
+    `CREATE INDEX IF NOT EXISTS "purchases_release_idx" ON "user_purchases"("released","release_at");`,
+    `CREATE INDEX IF NOT EXISTS "purchases_payment_reference_idx" ON "user_purchases"("payment_reference");`,
+    `CREATE INDEX IF NOT EXISTS "cart_user_idx" ON "cart"("user_id");`,
+    `CREATE INDEX IF NOT EXISTS "cart_book_idx" ON "cart"("book_id");`,
     `CREATE INDEX IF NOT EXISTS "pending_changes_status_idx" ON "pending_changes"("status");`,
+    `CREATE INDEX IF NOT EXISTS "pending_changes_slug_idx" ON "pending_changes"("book_slug");`,
+    `CREATE INDEX IF NOT EXISTS "pending_changes_submitted_by_idx" ON "pending_changes"("submitted_by");`,
     `CREATE INDEX IF NOT EXISTS "deleted_user_original_user_idx" ON "deleted_user_archives"("original_user_id");`,
     `CREATE INDEX IF NOT EXISTS "deleted_user_email_idx" ON "deleted_user_archives"("original_email");`,
     `CREATE INDEX IF NOT EXISTS "deleted_user_deleted_at_idx" ON "deleted_user_archives"("account_deleted_at");`,
@@ -133,6 +148,24 @@ async function ensureLegacySchema(db: Db) {
   ]) {
     await db.execute(sql.raw(statement))
   }
+
+  // Legacy installations may already contain duplicate rows. Never make a cold
+  // start fail by blindly adding a unique index; add it only when the data is safe.
+  await db.execute(sql.raw(`DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM "user_purchases" GROUP BY "user_id", "book_id" HAVING count(*) > 1
+    ) THEN
+      EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS "purchases_user_book_idx" ON "user_purchases"("user_id","book_id")';
+    END IF;
+  END $$;`))
+
+  await db.execute(sql.raw(`DO $$ BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM "cart" GROUP BY "user_id", "book_id" HAVING count(*) > 1
+    ) THEN
+      EXECUTE 'CREATE UNIQUE INDEX IF NOT EXISTS "cart_user_book_idx" ON "cart"("user_id","book_id")';
+    END IF;
+  END $$;`))
 }
 
 function getConnectionUrl() {
@@ -211,11 +244,6 @@ async function establishConnection(): Promise<Db | null> {
 
 export async function getDb(): Promise<Db | null> {
   if (_pg) return _pg
-
-  // Important: concurrent requests during a serverless cold start must wait for
-  // the same database initialization instead of immediately receiving null.
-  // Returning null here used to make valid logins look like bad credentials and
-  // registrations fail with "Database not available" under concurrent traffic.
   if (_connectPromise) return _connectPromise
 
   _connectPromise = establishConnection()
