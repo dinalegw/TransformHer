@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { authenticateUser, createSession, validateEmail, validatePassword } from '@/lib/auth'
 import { getDb } from '@/lib/db/connection'
 import { sendLoginNotification } from '@/lib/email'
+import { getBlockedLoginState } from '@/lib/login-access'
+import { claimNotification } from '@/lib/notification-dedupe'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { SUPPORT_EMAIL } from '@/lib/support'
 
 function safeLocation(req: Request): string {
   const rawCity = req.headers.get('x-vercel-ip-city')?.trim() || ''
@@ -35,10 +38,17 @@ function safeRedirect(value: unknown): string {
   return path.startsWith('/') && !path.startsWith('//') ? path : '/books'
 }
 
-function formError(req: Request, message: string, redirect: string, status = 303) {
+function formError(
+  req: Request,
+  message: string,
+  redirect: string,
+  status = 303,
+  support = false,
+) {
   const url = new URL('/login', req.url)
   url.searchParams.set('error', message)
   if (redirect !== '/books') url.searchParams.set('redirect', redirect)
+  if (support) url.searchParams.set('support', '1')
   return NextResponse.redirect(url, status)
 }
 
@@ -66,6 +76,16 @@ function setSessionCookie(res: NextResponse, sessionId: string) {
     maxAge: 7 * 24 * 60 * 60,
     path: '/',
   })
+}
+
+function blockedMessage(state: 'frozen' | 'archived' | 'deletion_pending'): string {
+  if (state === 'frozen') {
+    return `Your account has been frozen. Please contact ${SUPPORT_EMAIL} so our support team can review and resolve the issue.`
+  }
+  if (state === 'archived') {
+    return `Your account has been archived. Please contact ${SUPPORT_EMAIL} if you need the account restored or want help resolving the issue.`
+  }
+  return `Your account is currently unavailable. Please contact ${SUPPORT_EMAIL} for assistance.`
 }
 
 export async function POST(req: Request) {
@@ -106,6 +126,14 @@ export async function POST(req: Request) {
 
     const user = await authenticateUser(email, password)
     if (!user) {
+      const blocked = await getBlockedLoginState(email, password)
+      if (blocked) {
+        const message = blockedMessage(blocked)
+        return htmlForm
+          ? formError(req, message, redirectTo, 303, true)
+          : NextResponse.json({ error: message, accountStatus: blocked, supportEmail: SUPPORT_EMAIL }, { status: 423 })
+      }
+
       const message = 'Invalid email or password'
       return htmlForm ? formError(req, message, redirectTo) : NextResponse.json({ error: message }, { status: 401 })
     }
@@ -117,7 +145,14 @@ export async function POST(req: Request) {
     setSessionCookie(res, sessionId)
 
     try {
-      await sendLoginNotification(user.email, user.name, safeLocation(req), safeDevice(req))
+      // A browser retry/double-submit or two horizontally-scaled functions should
+      // never produce duplicate sign-in emails for the same successful login.
+      const shouldSend = await claimNotification(`login:${user.id}`, 2 * 60_000)
+      if (shouldSend) {
+        await sendLoginNotification(user.email, user.name, safeLocation(req), safeDevice(req))
+      } else {
+        console.info('[auth] duplicate login notification suppressed', { userId: user.id })
+      }
     } catch (err) {
       console.error('Failed to send login notification:', err)
     }
