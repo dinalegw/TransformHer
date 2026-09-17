@@ -6,7 +6,7 @@ import {
   validatePassword,
   validateName,
 } from '@/lib/auth'
-import { sendWelcomeVerificationEmail } from '@/lib/email'
+import { sendWelcomeVerificationEmail, waitForCourierDispatch } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
 
@@ -89,8 +89,21 @@ export async function POST(req: Request) {
     let verificationEmailSent = false
 
     try {
-      await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
-      verificationEmailSent = true
+      const receipt = await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
+      const dispatch = await waitForCourierDispatch(receipt.requestId)
+      verificationEmailSent = dispatch.state !== 'failed'
+
+      if (dispatch.state === 'failed') {
+        console.error('Welcome verification email failed in Courier:', {
+          requestId: receipt.requestId,
+          status: dispatch.status,
+        })
+      } else {
+        console.info('Welcome verification email request accepted:', {
+          requestId: receipt.requestId,
+          status: dispatch.status,
+        })
+      }
     } catch (err) {
       console.error('Failed to send welcome email:', err)
     }
