@@ -4,6 +4,26 @@ import { getDb } from '@/lib/db/connection'
 import { sendLoginNotification } from '@/lib/email'
 import { checkRateLimit } from '@/lib/rate-limit'
 
+function safeLocation(req: Request): string {
+  const rawCity = req.headers.get('x-vercel-ip-city')?.trim() || ''
+  const country = req.headers.get('x-vercel-ip-country')?.trim() || ''
+  let city = rawCity
+  if (rawCity) {
+    try {
+      city = decodeURIComponent(rawCity)
+    } catch {
+      city = rawCity
+    }
+  }
+  const parts = [city, country].filter(Boolean).map((part) => part.slice(0, 80))
+  return parts.join(', ') || 'Unavailable'
+}
+
+function safeDevice(req: Request): string {
+  const userAgent = req.headers.get('user-agent')?.trim()
+  return userAgent ? userAgent.slice(0, 180) : 'Unknown device'
+}
+
 export async function POST(req: Request) {
   try {
     const rateLimit = await checkRateLimit(req, '/api/auth/login')
@@ -49,7 +69,9 @@ export async function POST(req: Request) {
     })
 
     try {
-      await sendLoginNotification(user.email, user.name)
+      // Include coarse Vercel location and browser/device context in the security
+      // email without logging or persisting the user's IP address.
+      await sendLoginNotification(user.email, user.name, safeLocation(req), safeDevice(req))
     } catch (err) {
       // Authentication must not fail because a notification provider is unavailable.
       console.error('Failed to send login notification:', err)
