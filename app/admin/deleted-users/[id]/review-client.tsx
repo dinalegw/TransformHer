@@ -15,6 +15,18 @@ interface PurchaseSnapshot {
   releaseAt?: string | null
 }
 
+interface RetainedAccessEvent {
+  id: string
+  eventType: string
+  ipAddress?: string | null
+  userAgent?: string | null
+  deviceSummary?: string | null
+  city?: string | null
+  country?: string | null
+  accessedAt: string
+  retainedAt: string
+}
+
 interface ArchiveRecord {
   id: string
   originalUserId: string
@@ -30,6 +42,7 @@ interface ArchiveRecord {
   accountStatusAtDeletion?: string | null
   emailVerified: boolean
   purchaseSnapshot: PurchaseSnapshot[]
+  accessHistory: RetainedAccessEvent[]
   retentionReason: string
   retentionExpiresAt: string
   legalHold: boolean
@@ -42,6 +55,10 @@ function formatDate(value?: string | null) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleString()
+}
+
+function formatLocation(event: RetainedAccessEvent) {
+  return [event.city, event.country].filter(Boolean).join(', ') || 'Unavailable'
 }
 
 export function DeletedUserReviewClient({ archiveId }: { archiveId: string }) {
@@ -142,7 +159,7 @@ export function DeletedUserReviewClient({ archiveId }: { archiveId: string }) {
       <section className="rounded-xl border bg-card p-5">
         <h2 className="font-semibold">Documented access purpose</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          A reason is required before retained personal or purchase information is disclosed.
+          A reason is required before retained personal, access-security, or purchase information is disclosed.
         </p>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
@@ -151,7 +168,7 @@ export function DeletedUserReviewClient({ archiveId }: { archiveId: string }) {
               id="reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              placeholder="e.g. Payment dispute investigation"
+              placeholder="e.g. Payment dispute or security investigation"
               maxLength={500}
             />
           </div>
@@ -220,6 +237,46 @@ export function DeletedUserReviewClient({ archiveId }: { archiveId: string }) {
           </section>
 
           <section className="rounded-xl border bg-card p-5">
+            <h2 className="text-xl font-semibold">Retained authenticated access history</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Successful sign-in security events retained with this deleted-account record. IP addresses identify an observed network endpoint and may represent a VPN, proxy, mobile carrier, NAT or shared connection; they are not proof of a person&apos;s identity by themselves.
+            </p>
+
+            {archive.accessHistory.length === 0 ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                No retained authenticated access events. Access history is recorded only from deployment of this security feature onward.
+              </p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[900px] text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="p-2">Timestamp</th>
+                      <th className="p-2">IP address</th>
+                      <th className="p-2">Device</th>
+                      <th className="p-2">Location</th>
+                      <th className="p-2">User agent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {archive.accessHistory.map((event) => (
+                      <tr key={event.id} className="border-t align-top">
+                        <td className="whitespace-nowrap p-2">{formatDate(event.accessedAt)}</td>
+                        <td className="p-2 font-mono text-xs">{event.ipAddress || 'Unavailable'}</td>
+                        <td className="p-2">{event.deviceSummary || 'Unknown device'}</td>
+                        <td className="p-2">{formatLocation(event)}</td>
+                        <td className="max-w-md break-words p-2 font-mono text-xs text-muted-foreground">
+                          {event.userAgent || 'Unavailable'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-xl border bg-card p-5">
             <h2 className="text-xl font-semibold">Retained purchase references</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Limited transaction evidence only. Payment credentials and authentication secrets are not retained here.
@@ -243,7 +300,7 @@ export function DeletedUserReviewClient({ archiveId }: { archiveId: string }) {
                       <tr key={`${purchase.paymentReference || purchase.bookSlug || purchase.bookId || 'purchase'}-${index}`} className="border-t">
                         <td className="p-2">{purchase.bookSlug || purchase.bookId || '—'}</td>
                         <td className="p-2">{formatDate(purchase.purchaseDate)}</td>
-                        <td className="p-2 break-all">{purchase.paymentReference || '—'}</td>
+                        <td className="break-all p-2">{purchase.paymentReference || '—'}</td>
                         <td className="p-2">{purchase.released ? 'Yes' : 'No'}</td>
                       </tr>
                     ))}
