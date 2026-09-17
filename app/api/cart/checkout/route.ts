@@ -7,7 +7,7 @@ import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
-  const rateLimit = checkRateLimit(req, '/api/cart/checkout')
+  const rateLimit = await checkRateLimit(req, '/api/cart/checkout')
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
