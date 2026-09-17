@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { BookOpen, Users, Shield, Bell, ShoppingBag } from 'lucide-react'
+import { BookOpen, Users, Shield, Bell, ShoppingBag, UserRoundX } from 'lucide-react'
 import { AdminBookManager } from '@/components/admin-book-manager'
 import { AdminUserManager } from '@/components/admin-user-manager'
 import { AdminPendingChanges } from '@/components/admin-pending-changes'
@@ -76,6 +77,16 @@ export function AdminDashboardClient({ books, userRole, userEmail, userName, isM
             {t.label}
           </button>
         ))}
+
+        {isMaster && (
+          <Link
+            href="/admin/deleted-users"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-background hover:text-foreground hover:shadow-sm"
+          >
+            <UserRoundX className="size-4" />
+            Deleted Accounts
+          </Link>
+        )}
       </div>
 
       {tab === 'books' && (
