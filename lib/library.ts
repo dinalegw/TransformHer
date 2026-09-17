@@ -50,22 +50,22 @@ export async function fetchLibrary(userId: string, includeArchived = false, isMa
   if (!db) return []
 
   const conditions = [eq(userPurchases.userId, userId)]
-  if (!includeArchived) {
-    conditions.push(eq(userPurchases.archived, false))
-  }
+  if (!includeArchived) conditions.push(eq(userPurchases.archived, false))
 
-  const rows = await db.select()
-    .from(userPurchases)
-    .where(and(...conditions))
-
+  const rows = await db.select().from(userPurchases).where(and(...conditions))
   return rows.map(toLibraryItem)
 }
 
 export async function getLibraryItem(userId: string, bookId: number, isMasterAdmin = false): Promise<LibraryItem | null> {
   if (isMasterAdmin) {
     return {
-      id: 0, userId, bookId, bookSlug: '',
-      purchaseDate: new Date().toISOString(), released: true, releaseAt: null,
+      id: 0,
+      userId,
+      bookId,
+      bookSlug: '',
+      purchaseDate: new Date().toISOString(),
+      released: true,
+      releaseAt: null,
     }
   }
 
@@ -93,7 +93,11 @@ export async function addToLibrary(userId: string, bookId: number, bookSlug: str
 
   const now = new Date()
   await db.insert(userPurchases).values({
-    userId, bookId, bookSlug, released: true, releaseAt: now,
+    userId,
+    bookId,
+    bookSlug,
+    released: true,
+    releaseAt: now,
   })
 }
 
@@ -110,12 +114,14 @@ export async function recordPurchase(
     .from(userPurchases)
     .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookId, bookId)))
     .limit(1)
-
   if (existing.length > 0) return
 
   const releaseAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
   await db.insert(userPurchases).values({
-    userId, bookId, bookSlug, paymentReference,
+    userId,
+    bookId,
+    bookSlug,
+    paymentReference,
     released: false,
     releaseAt,
   })
@@ -150,10 +156,43 @@ export async function releasePendingBooks(userId: string): Promise<LibraryItem[]
     await db.update(userPurchases)
       .set({ released: true })
       .where(eq(userPurchases.id, item.id))
-    released.push(toLibraryItem(item))
+    released.push({ ...toLibraryItem(item), released: true })
+  }
+  return released
+}
+
+/** Ownership is not the same as read access while a paid book is pending release. */
+export async function canReadBookBySlug(
+  userId: string,
+  slug: string,
+  isMasterAdmin = false,
+): Promise<boolean> {
+  if (isMasterAdmin) return true
+
+  const db = await getDb()
+  if (!db) return false
+
+  const rows = await db.select({
+    id: userPurchases.id,
+    released: userPurchases.released,
+    releaseAt: userPurchases.releaseAt,
+  })
+    .from(userPurchases)
+    .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookSlug, slug)))
+    .limit(1)
+
+  const item = rows[0]
+  if (!item) return false
+  if (item.released) return true
+
+  if (item.releaseAt && item.releaseAt.getTime() <= Date.now()) {
+    await db.update(userPurchases)
+      .set({ released: true })
+      .where(eq(userPurchases.id, item.id))
+    return true
   }
 
-  return released
+  return false
 }
 
 export async function removeFromLibrary(userId: string, bookId: number): Promise<void> {
@@ -233,7 +272,6 @@ export async function addToCart(userId: string, bookId: number): Promise<void> {
     .from(cartTable)
     .where(and(eq(cartTable.userId, userId), eq(cartTable.bookId, bookId)))
     .limit(1)
-
   if (existing.length > 0) return
 
   await db.insert(cartTable).values({ userId, bookId })
