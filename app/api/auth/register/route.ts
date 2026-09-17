@@ -59,7 +59,9 @@ export async function POST(req: Request) {
 
     const body = await readBody(req)
     htmlForm = body.htmlForm
-    const { name, email, password } = body
+    const name = typeof body.name === 'string' ? body.name : ''
+    const email = typeof body.email === 'string' ? body.email : ''
+    const password = typeof body.password === 'string' ? body.password : ''
 
     const nameError = validateName(name)
     if (nameError) return htmlForm ? formError(req, nameError) : NextResponse.json({ error: nameError }, { status: 400 })
@@ -70,7 +72,7 @@ export async function POST(req: Request) {
     const passwordError = validatePassword(password)
     if (passwordError) return htmlForm ? formError(req, passwordError) : NextResponse.json({ error: passwordError }, { status: 400 })
 
-    const user = await createUser(String(name).trim(), String(email), String(password))
+    const user = await createUser(name.trim(), email, password)
     const sessionId = await createSession(user.id)
     const res = htmlForm
       ? NextResponse.redirect(new URL('/books?accountCreated=1', req.url), 303)
