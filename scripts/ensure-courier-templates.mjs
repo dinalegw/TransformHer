@@ -160,6 +160,21 @@ const TEMPLATES = [
     ], { hero: true }),
   },
   {
+    key: 'COURIER_TEMPLATE_EMAIL_VERIFICATION_CODE',
+    legacyName: 'Email Verification Code',
+    canonicalName: 'TransformHer Email Verification Code',
+    tags: ['transformher', 'auth', 'verification', 'security'],
+    content: emailContent('Your TransformHer verification code', 'VERIFY YOUR EMAIL', [
+      heading('Your verification code'),
+      text('Hi {{name}}, enter the code below on your TransformHer profile to verify your email address.'),
+      divider(),
+      text('{{code}}', { text_style: 'h1', color: BRAND.gold, bold: true }),
+      divider(),
+      text('This code expires in {{expiresInMinutes}} minutes and can only be used for your signed-in account.'),
+      muted(`If you did not request this code, you can ignore this email or contact ${SUPPORT_EMAIL}.`),
+    ]),
+  },
+  {
     key: 'COURIER_TEMPLATE_EMAIL_VERIFIED',
     legacyName: 'Email Verified',
     canonicalName: 'TransformHer Email Verified',
@@ -167,8 +182,8 @@ const TEMPLATES = [
     content: emailContent('Your TransformHer email is verified', 'VERIFICATION COMPLETE', [
       heading('You are verified'),
       text('Hi {{name}}, your email address has been verified successfully.'),
-      text('Your account is ready for secure access to your TransformHer library.'),
-      action('Open my library', '{{libraryLink}}', BRAND.gold),
+      text('Your verified email is now locked to this TransformHer account for account security.'),
+      action('Open my profile', `${SITE_URL}/profile`, BRAND.gold),
     ]),
   },
   {
