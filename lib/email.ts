@@ -42,6 +42,11 @@ function getTemplate(key: string): string {
   return templateId
 }
 
+function recipientDomain(address: string): string {
+  const at = address.lastIndexOf('@')
+  return at >= 0 ? address.slice(at + 1).toLowerCase().slice(0, 120) : 'invalid'
+}
+
 async function sendMessage(
   to: string,
   templateId: string,
@@ -50,7 +55,7 @@ async function sendMessage(
 ): Promise<void> {
   try {
     console.info(`[courier] send:${label}`, {
-      to,
+      recipientDomain: recipientDomain(to),
       template: templateId,
       dataKeys: Object.keys(data),
     })
@@ -66,7 +71,7 @@ async function sendMessage(
     console.info(`[courier] accepted:${label}`, { requestId: res.requestId })
   } catch (error) {
     console.error(`[courier] send_failed:${label}`, {
-      to,
+      recipientDomain: recipientDomain(to),
       template: templateId,
       dataKeys: Object.keys(data),
       error,
