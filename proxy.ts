@@ -29,7 +29,6 @@ function verifyToken(token: string): Record<string, unknown> | null {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Ebook content must only be served through the ownership-checked reader route.
   if (pathname.startsWith('/uploads/')) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
@@ -105,7 +104,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith('/api/')) {
-    const rateLimit = checkRateLimit(request, pathname)
+    const rateLimit = await checkRateLimit(request, pathname)
     if (!rateLimit.allowed) {
       return new NextResponse(
         JSON.stringify({ error: 'Too many requests', retryAfter: rateLimit.retryAfter }),
