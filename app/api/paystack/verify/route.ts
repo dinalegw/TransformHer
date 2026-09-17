@@ -12,7 +12,7 @@ function isReference(value: unknown): value is string {
  * happen in the dedicated confirmation routes, where amount/items are checked.
  */
 export async function POST(req: Request) {
-  const rateLimit = checkRateLimit(req, '/api/paystack/verify')
+  const rateLimit = await checkRateLimit(req, '/api/paystack/verify')
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
@@ -42,7 +42,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Payment does not belong to this account' }, { status: 403 })
     }
 
-    // Never expose Paystack's complete customer/metadata response to the browser.
     return NextResponse.json({
       verified: payment.status === 'success',
       status: payment.status ?? 'unknown',
