@@ -1,22 +1,24 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { UserPlus, Eye, EyeOff, CheckCircle2, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 
-export default function SignupPage() {
+function SignupForm() {
+  const searchParams = useSearchParams()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(searchParams.get('error') || '')
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
-  async function handleSubmit(e: FormEvent) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError('')
 
@@ -95,15 +97,21 @@ export default function SignupPage() {
             <p className="mt-2 text-sm text-muted-foreground">Join our community</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <form
+            action="/api/auth/register"
+            method="post"
+            onSubmit={handleSubmit}
+            className="mt-8 space-y-5"
+          >
             {error && (
-              <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>
+              <p role="alert" aria-live="polite" className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">{error}</p>
             )}
 
             <div>
               <label htmlFor="name" className="text-sm font-medium text-foreground">Full name</label>
               <input
                 id="name"
+                name="name"
                 type="text"
                 required
                 autoComplete="name"
@@ -118,6 +126,7 @@ export default function SignupPage() {
               <label htmlFor="email" className="text-sm font-medium text-foreground">Email</label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 required
                 autoComplete="email"
@@ -133,8 +142,10 @@ export default function SignupPage() {
               <div className="relative mt-1">
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
+                  minLength={8}
                   autoComplete="new-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -146,15 +157,20 @@ export default function SignupPage() {
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
                   tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" disabled={loading} className="w-full rounded-full">
+            <button
+              type="submit"
+              disabled={loading}
+              className="inline-flex h-9 w-full items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80 disabled:pointer-events-none disabled:opacity-50"
+            >
               {loading ? 'Creating account...' : 'Create account'}
-            </Button>
+            </button>
           </form>
 
           <p className="mt-6 text-center text-sm text-muted-foreground">
@@ -165,5 +181,13 @@ export default function SignupPage() {
       </main>
       <SiteFooter />
     </div>
+  )
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="min-h-svh" />}>
+      <SignupForm />
+    </Suspense>
   )
 }
