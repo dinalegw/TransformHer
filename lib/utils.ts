@@ -14,14 +14,35 @@ export function getDisplayName(user: {
   return user.username
 }
 
-export function getBaseUrl(): string {
-  const configuredUrl = process.env.NEXT_PUBLIC_BASE_URL
-  if (configuredUrl) return configuredUrl.replace(/\/$/, '')
+function normalizePublicUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, '')
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+}
 
-  const vercelUrl = process.env.VERCEL_URL
-  if (vercelUrl) return `https://${vercelUrl}`
-  if (process.env.NODE_ENV === 'development') return 'http://localhost:3000'
-  return 'https://transformher.vercel.app'
+/**
+ * Public links sent to customers must use the stable production hostname.
+ * VERCEL_URL identifies one immutable deployment and may be protected by Vercel
+ * authentication, so it must never be used for production password-reset or
+ * email-verification links.
+ */
+export function getBaseUrl(): string {
+  const canonicalOverride = process.env.TRANSFORMHER_PUBLIC_URL?.trim()
+  if (canonicalOverride) return normalizePublicUrl(canonicalOverride)
+
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production') {
+    const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim()
+    return productionUrl
+      ? normalizePublicUrl(productionUrl)
+      : 'https://transformher.vercel.app'
+  }
+
+  const configuredUrl = process.env.NEXT_PUBLIC_BASE_URL?.trim()
+  if (configuredUrl) return normalizePublicUrl(configuredUrl)
+
+  const vercelUrl = process.env.VERCEL_URL?.trim()
+  if (vercelUrl) return normalizePublicUrl(vercelUrl)
+
+  return 'http://localhost:3000'
 }
 
 /**
@@ -34,7 +55,6 @@ export function safeImageSrc(value: unknown, fallback = '/placeholder.svg'): str
   if (typeof value !== 'string') return fallback
   const candidate = value.trim()
   if (!candidate) return fallback
-
   if (candidate.startsWith('/') && !candidate.startsWith('//')) return candidate
 
   try {
