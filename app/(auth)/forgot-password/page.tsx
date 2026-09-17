@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react'
 import Link from 'next/link'
-import { Lock, ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Lock, MailCheck, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
@@ -25,15 +25,22 @@ export default function ForgotPasswordPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || 'Something went wrong')
+        setError(data.error || 'We could not process the reset request. Please try again.')
+        setSent(false)
       } else {
         setSent(true)
       }
     } catch {
-      setError('Something went wrong')
+      setError('We could not process the reset request. Please check your connection and try again.')
+      setSent(false)
     } finally {
       setLoading(false)
     }
+  }
+
+  function sendAgain() {
+    setSent(false)
+    setError('')
   }
 
   return (
@@ -45,27 +52,42 @@ export default function ForgotPasswordPage() {
             <Lock className="mx-auto size-8 text-primary" />
             <h1 className="mt-4 font-heading text-3xl text-foreground">Forgot password?</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Enter your email and we&apos;ll send you a reset link
+              Enter your email and we&apos;ll send you reset instructions
             </p>
           </div>
 
           {sent ? (
-            <div className="mt-8 space-y-5 text-center">
-              <p className="text-sm text-muted-foreground">
-                If that email is registered, a password reset link has been sent. Check your inbox.
-              </p>
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-              >
-                <ArrowLeft className="size-4" />
-                Back to sign in
-              </Link>
+            <div className="mt-8 space-y-6 text-center">
+              <div className="rounded-xl border border-border bg-card p-5">
+                <MailCheck className="mx-auto size-9 text-primary" />
+                <h2 className="mt-3 text-base font-semibold text-foreground">Reset request received</h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  If an account matches <span className="font-medium text-foreground">{email}</span>,
+                  password reset instructions will arrive shortly.
+                </p>
+                <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                  Check your Inbox and Spam/Junk folder. The reset link expires in 1 hour and can only be used once.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <Button type="button" variant="outline" onClick={sendAgain} className="w-full rounded-full">
+                  <RotateCcw className="size-4" />
+                  Send another reset link
+                </Button>
+                <Link
+                  href="/login"
+                  className="inline-flex items-center justify-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                >
+                  <ArrowLeft className="size-4" />
+                  Back to sign in
+                </Link>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="mt-8 space-y-5">
               {error && (
-                <p className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
+                <p role="alert" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
                   {error}
                 </p>
               )}
@@ -80,13 +102,14 @@ export default function ForgotPasswordPage() {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
                   className="mt-1 h-9 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
                   placeholder="you@example.com"
                 />
               </div>
 
               <Button type="submit" disabled={loading} className="w-full rounded-full">
-                {loading ? 'Sending...' : 'Send reset link'}
+                {loading ? 'Sending reset instructions...' : 'Send reset link'}
               </Button>
 
               <p className="text-center text-sm text-muted-foreground">
