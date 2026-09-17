@@ -1,42 +1,250 @@
 import {
-  boolean, integer, numeric, pgTable, serial, text, timestamp, pgEnum, index, uniqueIndex,
+  boolean,
+  integer,
+  numeric,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  pgEnum,
+  index,
+  uniqueIndex,
 } from 'drizzle-orm/pg-core'
+
+/* ------------------------------------------------------------------ */
+/* Enums                                                               */
+/* ------------------------------------------------------------------ */
 
 export const userRoleEnum = pgEnum('user_role', ['user', 'admin', 'master_admin'])
 export const adminRankEnum = pgEnum('admin_rank', ['junior', 'senior', 'lead', 'master'])
 export const accountStatusEnum = pgEnum('account_status', ['active', 'frozen', 'deletion_pending', 'archived'])
-export const bookCategoryEnum = pgEnum('book_category', ['Mindset & Confidence','Career & Wealth','Wellness & Self-Care','Relationships','Spirituality & Purpose','Leadership'])
+export const bookCategoryEnum = pgEnum('book_category', [
+  'Mindset & Confidence',
+  'Career & Wealth',
+  'Wellness & Self-Care',
+  'Relationships',
+  'Spirituality & Purpose',
+  'Leadership',
+])
 export const currencyEnum = pgEnum('currency', ['NGN', 'USD', 'GBP', 'EUR'])
 export const changeStatusEnum = pgEnum('change_status', ['pending', 'approved', 'rejected'])
 export const changeTypeEnum = pgEnum('change_type', ['create', 'update', 'delete', 'archive'])
 export const bookSourceEnum = pgEnum('book_source', ['seed', 'admin'])
 
+/* ------------------------------------------------------------------ */
+/* Users & Auth                                                        */
+/* ------------------------------------------------------------------ */
+
 export const user = pgTable('user', {
-  id: text('id').primaryKey(), name: text('name').notNull(), email: text('email').notNull().unique(),
-  emailVerified: boolean('email_verified').notNull().default(false), image: text('image'), passwordHash: text('password_hash'),
-  isAdmin: boolean('is_admin').notNull().default(false), username: text('username'), phone: text('phone'), showFullName: boolean('show_full_name').notNull().default(false),
-  role: userRoleEnum('role').notNull().default('user'), rank: adminRankEnum('rank'), title: text('title'), permissions: text('permissions').notNull().default('[]'), tokenVersion: integer('token_version').notNull().default(0),
-  accountStatus: accountStatusEnum('account_status').notNull().default('active'), frozenAt: timestamp('frozen_at'), frozenBy: text('frozen_by'), freezeReason: text('freeze_reason'), deletionRequestedAt: timestamp('deletion_requested_at'), archivedAt: timestamp('archived_at'),
-  createdAt: timestamp('created_at').notNull().$default(() => new Date()), updatedAt: timestamp('updated_at').notNull().$default(() => new Date()),
-}, t => ({ emailIdx: uniqueIndex('user_email_idx').on(t.email), roleIdx: index('user_role_idx').on(t.role), tokenVersionIdx: index('user_token_version_idx').on(t.tokenVersion), statusIdx: index('user_account_status_idx').on(t.accountStatus) }))
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  image: text('image'),
+  passwordHash: text('password_hash'),
+  isAdmin: boolean('is_admin').notNull().default(false),
+  username: text('username'),
+  phone: text('phone'),
+  showFullName: boolean('show_full_name').notNull().default(false),
+  role: userRoleEnum('role').notNull().default('user'),
+  rank: adminRankEnum('rank'),
+  title: text('title'),
+  permissions: text('permissions').notNull().default('[]'),
+  tokenVersion: integer('token_version').notNull().default(0),
+  accountStatus: accountStatusEnum('account_status').notNull().default('active'),
+  frozenAt: timestamp('frozen_at'),
+  frozenBy: text('frozen_by'),
+  freezeReason: text('freeze_reason'),
+  deletionRequestedAt: timestamp('deletion_requested_at'),
+  archivedAt: timestamp('archived_at'),
+  createdAt: timestamp('created_at').notNull().$default(() => new Date()),
+  updatedAt: timestamp('updated_at').notNull().$default(() => new Date()),
+}, (table) => ({
+  emailIdx: uniqueIndex('user_email_idx').on(table.email),
+  roleIdx: index('user_role_idx').on(table.role),
+  tokenVersionIdx: index('user_token_version_idx').on(table.tokenVersion),
+  statusIdx: index('user_account_status_idx').on(table.accountStatus),
+}))
 
-export const session = pgTable('session', { id:text('id').primaryKey(), expiresAt:timestamp('expires_at').notNull(), token:text('token').notNull().unique(), createdAt:timestamp('created_at').notNull().$default(()=>new Date()), updatedAt:timestamp('updated_at').notNull().$default(()=>new Date()), ipAddress:text('ip_address'), userAgent:text('user_agent'), userId:text('user_id').notNull().references(()=>user.id,{onDelete:'cascade'}) })
-export const account = pgTable('account', { id:text('id').primaryKey(), accountId:text('account_id').notNull(), providerId:text('provider_id').notNull(), userId:text('user_id').notNull().references(()=>user.id,{onDelete:'cascade'}), accessToken:text('access_token'), refreshToken:text('refresh_token'), idToken:text('id_token'), accessTokenExpiresAt:timestamp('access_token_expires_at'), refreshTokenExpiresAt:timestamp('refresh_token_expires_at'), scope:text('scope'), password:text('password'), createdAt:timestamp('created_at').notNull().$default(()=>new Date()), updatedAt:timestamp('updated_at').notNull().$default(()=>new Date()) })
-export const verification = pgTable('verification', { id:text('id').primaryKey(), identifier:text('identifier').notNull(), value:text('value').notNull(), expiresAt:timestamp('expires_at').notNull(), createdAt:timestamp('created_at').$default(()=>new Date()), updatedAt:timestamp('updated_at').$default(()=>new Date()) })
+export const session = pgTable('session', {
+  id: text('id').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+  token: text('token').notNull().unique(),
+  createdAt: timestamp('created_at').notNull().$default(() => new Date()),
+  updatedAt: timestamp('updated_at').notNull().$default(() => new Date()),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+}, (table) => ({
+  tokenIdx: uniqueIndex('session_token_idx').on(table.token),
+  userIdx: index('session_user_idx').on(table.userId),
+  expiryIdx: index('session_expiry_idx').on(table.expiresAt),
+}))
 
-export const books = pgTable('books', { id:serial('id').primaryKey(), slug:text('slug').notNull().unique(), title:text('title').notNull(), author:text('author').notNull(), category:bookCategoryEnum('category').notNull(), price:numeric('price',{precision:10,scale:2}).notNull().default('0'), currency:currencyEnum('currency').notNull().default('NGN'), coverImage:text('cover_image').notNull(), fileUrl:text('file_url'), tagline:text('tagline').notNull().default(''), description:text('description').notNull().default(''), rating:numeric('rating',{precision:2,scale:1}).notNull().default('5.0'), reviewsCount:integer('reviews_count').notNull().default(0), pages:integer('pages').notNull().default(0), featured:boolean('featured').notNull().default(false), bestseller:boolean('bestseller').notNull().default(false), source:bookSourceEnum('source').notNull().default('seed'), archived:boolean('archived').notNull().default(false), deleted:boolean('deleted').notNull().default(false), createdAt:timestamp('created_at').notNull().$default(()=>new Date()), updatedAt:timestamp('updated_at').notNull().$default(()=>new Date()) })
-export type Book=typeof books.$inferSelect
-export type NewBook=typeof books.$inferInsert
+export const account = pgTable('account', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at'),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  createdAt: timestamp('created_at').notNull().$default(() => new Date()),
+  updatedAt: timestamp('updated_at').notNull().$default(() => new Date()),
+}, (table) => ({
+  userIdx: index('account_user_idx').on(table.userId),
+  providerIdx: index('account_provider_idx').on(table.providerId),
+}))
 
-export const userPurchases=pgTable('user_purchases',{ id:serial('id').primaryKey(), userId:text('user_id').notNull().references(()=>user.id,{onDelete:'cascade'}), bookId:integer('book_id').notNull().references(()=>books.id,{onDelete:'cascade'}), bookSlug:text('book_slug').notNull(), purchaseDate:timestamp('purchase_date').notNull().$default(()=>new Date()), paymentReference:text('payment_reference'), released:boolean('released').notNull().default(false), releaseAt:timestamp('release_at'), archived:boolean('archived').notNull().default(false) })
-export type UserPurchase=typeof userPurchases.$inferSelect
-export const cart=pgTable('cart',{ id:serial('id').primaryKey(), userId:text('user_id').notNull().references(()=>user.id,{onDelete:'cascade'}), bookId:integer('book_id').notNull().references(()=>books.id,{onDelete:'cascade'}), addedAt:timestamp('added_at').notNull().$default(()=>new Date()) })
-export type CartItem=typeof cart.$inferSelect
+export const verification = pgTable('verification', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').$default(() => new Date()),
+  updatedAt: timestamp('updated_at').$default(() => new Date()),
+}, (table) => ({
+  identifierIdx: index('verification_identifier_idx').on(table.identifier),
+  expiryIdx: index('verification_expiry_idx').on(table.expiresAt),
+}))
 
-export const pendingChanges=pgTable('pending_changes',{ id:text('id').primaryKey(), bookSlug:text('book_slug').notNull(), bookTitle:text('book_title').notNull(), type:changeTypeEnum('type').notNull(), changes:text('changes').notNull().default('{}'), submittedBy:text('submitted_by').notNull(), submittedByEmail:text('submitted_by_email').notNull(), submittedAt:timestamp('submitted_at').notNull().$default(()=>new Date()), status:changeStatusEnum('status').notNull().default('pending'), reviewedBy:text('reviewed_by'), reviewedAt:timestamp('reviewed_at') })
-export type PendingChangeRow=typeof pendingChanges.$inferSelect
+/* ------------------------------------------------------------------ */
+/* Books                                                               */
+/* ------------------------------------------------------------------ */
 
-/** Restricted compliance archive. Never store password hashes, sessions, auth tokens or payment secrets here. */
-export const deletedUserArchives=pgTable('deleted_user_archives',{
-  id:text('id').primaryKey(), originalUserId:text('original_user_id').notNull(), originalEmail:text('original_email').notNull(), originalName:text('original_name').notNull(), username:text('username'), phone:text('phone'), accountCreatedAt:timestamp('account_created_at'), accountDeletedAt:timestamp('account_deleted_at').notNull(), deletionType:text('deletion_type').notNull(), deletedBy:text('deleted_by'), deletionReason:text('deletion_reason'), accountStatusAtDeletion:text('account_status_at_deletion'), emailVerified:boolean('email_verified').notNull().default(false), purchaseSnapshot:text('purchase_snapshot').notNull().default('[]'), retentionReason:text('retention_reason').notNull(), retentionExpiresAt:timestamp('retention_expires_at').notNull(), legalHold:boolean('legal_hold').notNull().default(false), legalHoldReference:text('legal_hold_reference'), createdAt:timestamp('created_at').notNull().$default(()=>new Date())
-},t=>({ originalUserIdx:index('deleted_user_original_user_idx').on(t.originalUserId), emailIdx:index('deleted_user_email_idx').on(t.originalEmail), deletedAtIdx:index('deleted_user_deleted_at_idx').on(t.accountDeletedAt), retentionIdx:index('deleted_user_retention_idx').on(t.retentionExpiresAt,t.legalHold) }))
+export const books = pgTable('books', {
+  id: serial('id').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  title: text('title').notNull(),
+  author: text('author').notNull(),
+  category: bookCategoryEnum('category').notNull(),
+  price: numeric('price', { precision: 10, scale: 2 }).notNull().default('0'),
+  currency: currencyEnum('currency').notNull().default('NGN'),
+  coverImage: text('cover_image').notNull(),
+  fileUrl: text('file_url'),
+  tagline: text('tagline').notNull().default(''),
+  description: text('description').notNull().default(''),
+  rating: numeric('rating', { precision: 2, scale: 1 }).notNull().default('5.0'),
+  reviewsCount: integer('reviews_count').notNull().default(0),
+  pages: integer('pages').notNull().default(0),
+  featured: boolean('featured').notNull().default(false),
+  bestseller: boolean('bestseller').notNull().default(false),
+  source: bookSourceEnum('source').notNull().default('seed'),
+  archived: boolean('archived').notNull().default(false),
+  deleted: boolean('deleted').notNull().default(false),
+  createdAt: timestamp('created_at').notNull().$default(() => new Date()),
+  updatedAt: timestamp('updated_at').notNull().$default(() => new Date()),
+}, (table) => ({
+  slugIdx: uniqueIndex('books_slug_idx').on(table.slug),
+  categoryIdx: index('books_category_idx').on(table.category),
+  featuredIdx: index('books_featured_idx').on(table.featured),
+  bestsellerIdx: index('books_bestseller_idx').on(table.bestseller),
+  sourceIdx: index('books_source_idx').on(table.source),
+  featuredBestsellerIdx: index('books_featured_bestseller_idx').on(table.featured, table.bestseller),
+  activeBooksIdx: index('books_active_idx').on(table.deleted, table.archived),
+}))
+
+export type Book = typeof books.$inferSelect
+export type NewBook = typeof books.$inferInsert
+
+/* ------------------------------------------------------------------ */
+/* User Purchases / Library                                            */
+/* ------------------------------------------------------------------ */
+
+export const userPurchases = pgTable('user_purchases', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  bookId: integer('book_id').notNull().references(() => books.id, { onDelete: 'cascade' }),
+  bookSlug: text('book_slug').notNull(),
+  purchaseDate: timestamp('purchase_date').notNull().$default(() => new Date()),
+  paymentReference: text('payment_reference'),
+  released: boolean('released').notNull().default(false),
+  releaseAt: timestamp('release_at'),
+  archived: boolean('archived').notNull().default(false),
+}, (table) => ({
+  userIdx: index('purchases_user_idx').on(table.userId),
+  bookIdx: index('purchases_book_idx').on(table.bookId),
+  slugIdx: index('purchases_slug_idx').on(table.bookSlug),
+  userBookIdx: uniqueIndex('purchases_user_book_idx').on(table.userId, table.bookId),
+  releaseIdx: index('purchases_release_idx').on(table.released, table.releaseAt),
+  paymentReferenceIdx: index('purchases_payment_reference_idx').on(table.paymentReference),
+}))
+
+export type UserPurchase = typeof userPurchases.$inferSelect
+
+/* ------------------------------------------------------------------ */
+/* Cart                                                                */
+/* ------------------------------------------------------------------ */
+
+export const cart = pgTable('cart', {
+  id: serial('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  bookId: integer('book_id').notNull().references(() => books.id, { onDelete: 'cascade' }),
+  addedAt: timestamp('added_at').notNull().$default(() => new Date()),
+}, (table) => ({
+  userIdx: index('cart_user_idx').on(table.userId),
+  bookIdx: index('cart_book_idx').on(table.bookId),
+  userBookIdx: uniqueIndex('cart_user_book_idx').on(table.userId, table.bookId),
+}))
+
+export type CartItem = typeof cart.$inferSelect
+
+/* ------------------------------------------------------------------ */
+/* Pending Changes (sub-admin workflow)                                */
+/* ------------------------------------------------------------------ */
+
+export const pendingChanges = pgTable('pending_changes', {
+  id: text('id').primaryKey(),
+  bookSlug: text('book_slug').notNull(),
+  bookTitle: text('book_title').notNull(),
+  type: changeTypeEnum('type').notNull(),
+  changes: text('changes').notNull().default('{}'),
+  submittedBy: text('submitted_by').notNull(),
+  submittedByEmail: text('submitted_by_email').notNull(),
+  submittedAt: timestamp('submitted_at').notNull().$default(() => new Date()),
+  status: changeStatusEnum('status').notNull().default('pending'),
+  reviewedBy: text('reviewed_by'),
+  reviewedAt: timestamp('reviewed_at'),
+}, (table) => ({
+  statusIdx: index('pending_changes_status_idx').on(table.status),
+  slugIdx: index('pending_changes_slug_idx').on(table.bookSlug),
+  submittedByIdx: index('pending_changes_submitted_by_idx').on(table.submittedBy),
+}))
+
+export type PendingChangeRow = typeof pendingChanges.$inferSelect
+
+/* ------------------------------------------------------------------ */
+/* Restricted account-deletion archive                                */
+/* ------------------------------------------------------------------ */
+
+/** Never store password hashes, sessions, auth tokens or payment secrets here. */
+export const deletedUserArchives = pgTable('deleted_user_archives', {
+  id: text('id').primaryKey(),
+  originalUserId: text('original_user_id').notNull(),
+  originalEmail: text('original_email').notNull(),
+  originalName: text('original_name').notNull(),
+  username: text('username'),
+  phone: text('phone'),
+  accountCreatedAt: timestamp('account_created_at'),
+  accountDeletedAt: timestamp('account_deleted_at').notNull(),
+  deletionType: text('deletion_type').notNull(),
+  deletedBy: text('deleted_by'),
+  deletionReason: text('deletion_reason'),
+  accountStatusAtDeletion: text('account_status_at_deletion'),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  purchaseSnapshot: text('purchase_snapshot').notNull().default('[]'),
+  retentionReason: text('retention_reason').notNull(),
+  retentionExpiresAt: timestamp('retention_expires_at').notNull(),
+  legalHold: boolean('legal_hold').notNull().default(false),
+  legalHoldReference: text('legal_hold_reference'),
+  createdAt: timestamp('created_at').notNull().$default(() => new Date()),
+}, (table) => ({
+  originalUserIdx: index('deleted_user_original_user_idx').on(table.originalUserId),
+  emailIdx: index('deleted_user_email_idx').on(table.originalEmail),
+  deletedAtIdx: index('deleted_user_deleted_at_idx').on(table.accountDeletedAt),
+  retentionIdx: index('deleted_user_retention_idx').on(table.retentionExpiresAt, table.legalHold),
+}))
