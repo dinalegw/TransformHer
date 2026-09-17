@@ -33,6 +33,14 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Enter your current password to continue.' }, { status: 400 })
     }
 
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    if (reason.length < 5) {
+      return NextResponse.json({ error: 'Please tell us why you want to delete your account.' }, { status: 400 })
+    }
+    if (reason.length > 500) {
+      return NextResponse.json({ error: 'Deletion reason must be 500 characters or fewer.' }, { status: 400 })
+    }
+
     const verified = await authenticateUser(user.email, body.password)
     if (!verified || verified.id !== user.id) {
       return NextResponse.json({ error: 'Current password is incorrect.' }, { status: 401 })
@@ -41,7 +49,7 @@ export async function DELETE(req: Request) {
     await archiveAndDeleteUser(
       user.id,
       null,
-      String(body.reason || 'User requested account deletion'),
+      reason,
       'self',
     )
 
