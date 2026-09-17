@@ -9,11 +9,11 @@ import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   try {
-    const rateLimit = checkRateLimit(req, '/api/auth/register')
+    const rateLimit = await checkRateLimit(req, '/api/auth/register')
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
-        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } }
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfter) } },
       )
     }
 
