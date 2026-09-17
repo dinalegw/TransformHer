@@ -6,9 +6,12 @@ export interface PaystackTransactionMetadata {
   userId?: string
   bookSlug?: string
   bookTitle?: string
-  bookIds?: string[]
+  bookIds?: Array<string | number>
   bookSlugs?: string[]
+  bookTitles?: string[]
   cartCheckout?: boolean
+  expectedAmountMinor?: number
+  expectedCurrency?: string
 }
 
 export interface PaystackCustomer {
@@ -41,17 +44,12 @@ export interface PaystackVerifyResponse {
 
 function getPaystackSecret(): string {
   const secret = process.env.PAYSTACK_SECRET_KEY?.trim()
-  if (!secret) {
-    throw new Error('[paystack] PAYSTACK_SECRET_KEY is not configured')
-  }
+  if (!secret) throw new Error('[paystack] PAYSTACK_SECRET_KEY is not configured')
   return secret
 }
 
 async function getJsonOrThrow<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    throw new Error(`[paystack] HTTP ${res.status}`)
-  }
-
+  if (!res.ok) throw new Error(`[paystack] HTTP ${res.status}`)
   return (await res.json()) as T
 }
 
