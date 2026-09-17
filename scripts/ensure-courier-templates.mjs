@@ -11,6 +11,7 @@ if (!isVercel || !apiKey) {
 
 const API_BASE = 'https://api.courier.com'
 const ROUTING_NAME = 'TransformHer Email'
+const SUPPORT_EMAIL = 'transformher360@gmail.com'
 
 const headers = {
   Authorization: `Bearer ${apiKey}`,
@@ -57,7 +58,7 @@ const TEMPLATES = [
     tags: ['transformher', 'auth', 'security'],
     content: emailContent('Your TransformHer password was reset', [
       text('Hi {{name}}, your TransformHer password has been reset successfully.'),
-      text('If you did not make this change, contact support and secure your account immediately.'),
+      text(`If you did not make this change, contact ${SUPPORT_EMAIL} and secure your account immediately.`),
     ]),
   },
   {
@@ -67,7 +68,7 @@ const TEMPLATES = [
     tags: ['transformher', 'auth', 'security'],
     content: emailContent('Your TransformHer password changed', [
       text('Hi {{name}}, the password for your TransformHer account was changed.'),
-      text('If this was not you, reset your password immediately.'),
+      text(`If this was not you, reset your password immediately and contact ${SUPPORT_EMAIL}.`),
     ]),
   },
   {
@@ -99,7 +100,7 @@ const TEMPLATES = [
     content: emailContent('Verify your new TransformHer email address', [
       text('Hi {{name}}, confirm this email address for your TransformHer account.'),
       action('Verify new email', '{{verifyLink}}'),
-      text('If you did not request this change, secure your account immediately.'),
+      text(`If you did not request this change, contact ${SUPPORT_EMAIL}.`),
     ]),
   },
   {
@@ -110,7 +111,7 @@ const TEMPLATES = [
     content: emailContent('New sign-in to your TransformHer account', [
       text('Hi {{name}}, a new sign-in to your TransformHer account was detected.'),
       text('Location: {{location}}\nDevice: {{device}}'),
-      text('If this was you, no action is required. If not, reset your password immediately.'),
+      text(`If this was you, no action is required. If not, reset your password and contact ${SUPPORT_EMAIL}.`),
     ]),
   },
   {
@@ -122,7 +123,7 @@ const TEMPLATES = [
       text('Hi {{name}}, we detected a security-related event on your account.'),
       text('Alert: {{alertType}}'),
       text('{{details}}'),
-      text('If you do not recognize this activity, secure your account immediately.'),
+      text(`If you do not recognize this activity, contact ${SUPPORT_EMAIL} immediately.`),
     ]),
   },
   {
@@ -133,6 +134,51 @@ const TEMPLATES = [
     content: emailContent("You're invited to TransformHer", [
       text('Hi {{name}}, {{inviterName}} invited you to TransformHer.'),
       action('Accept invitation', '{{inviteLink}}'),
+    ]),
+  },
+  {
+    key: 'COURIER_TEMPLATE_ACCOUNT_FROZEN',
+    legacyName: 'Account Frozen',
+    canonicalName: 'TransformHer Account Frozen',
+    tags: ['transformher', 'account', 'lifecycle', 'security'],
+    content: emailContent('Your TransformHer account has been frozen', [
+      text('Hi {{name}}, your TransformHer account has been frozen and sign-in access has been suspended.'),
+      text('Reason: {{reason}}'),
+      text(`If you believe this was done in error or want us to review the issue, contact our support team at ${SUPPORT_EMAIL}.`),
+      action('Contact TransformHer Support', `mailto:${SUPPORT_EMAIL}?subject=Frozen%20TransformHer%20Account`),
+    ]),
+  },
+  {
+    key: 'COURIER_TEMPLATE_ACCOUNT_ARCHIVED',
+    legacyName: 'Account Archived',
+    canonicalName: 'TransformHer Account Archived',
+    tags: ['transformher', 'account', 'lifecycle'],
+    content: emailContent('Your TransformHer account has been archived', [
+      text('Hi {{name}}, your TransformHer account has been archived and is not currently available for sign-in.'),
+      text(`If you need the account restored or want help resolving the issue, contact ${SUPPORT_EMAIL}.`),
+      action('Contact TransformHer Support', `mailto:${SUPPORT_EMAIL}?subject=Archived%20TransformHer%20Account`),
+    ]),
+  },
+  {
+    key: 'COURIER_TEMPLATE_ACCOUNT_UNFROZEN',
+    legacyName: 'Account Unfrozen',
+    canonicalName: 'TransformHer Account Unfrozen',
+    tags: ['transformher', 'account', 'lifecycle'],
+    content: emailContent('Your TransformHer account has been restored', [
+      text('Hi {{name}}, the freeze on your TransformHer account has been removed.'),
+      text('You can sign in again using your existing credentials.'),
+      text(`If you still experience any issue, contact ${SUPPORT_EMAIL}.`),
+    ]),
+  },
+  {
+    key: 'COURIER_TEMPLATE_ACCOUNT_UNARCHIVED',
+    legacyName: 'Account Unarchived',
+    canonicalName: 'TransformHer Account Unarchived',
+    tags: ['transformher', 'account', 'lifecycle'],
+    content: emailContent('Your TransformHer account has been reactivated', [
+      text('Hi {{name}}, your archived TransformHer account has been restored and reactivated.'),
+      text('You can now sign in again using your existing credentials.'),
+      text(`If you need any additional help, contact ${SUPPORT_EMAIL}.`),
     ]),
   },
   {
