@@ -1,30 +1,30 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { desc } from 'drizzle-orm'
 import { requireMasterAdmin } from '@/lib/auth'
-import { getDb } from '@/lib/db/connection'
-import { deletedUserArchives } from '@/lib/db/schema'
+import { listDeletedArchivesForCompliance } from '@/lib/compliance'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DeletedUsersPage() {
+  let admin
   try {
-    await requireMasterAdmin()
+    admin = await requireMasterAdmin()
   } catch {
     redirect('/login?next=/admin/deleted-users')
   }
 
-  const db = await getDb()
-  const rows = db
-    ? await db.select().from(deletedUserArchives)
-      .orderBy(desc(deletedUserArchives.accountDeletedAt))
-      .limit(100)
-    : []
+  let rows = [] as Awaited<ReturnType<typeof listDeletedArchivesForCompliance>>
+  try {
+    rows = await listDeletedArchivesForCompliance(admin)
+  } catch (err) {
+    console.error('[admin/deleted-users/page] archive list failed', err)
+  }
 
   return (
     <main className="mx-auto max-w-6xl p-6">
       <h1 className="text-3xl font-semibold">Deleted User Archive</h1>
       <p className="mt-2 text-sm opacity-70">
-        Restricted Master Admin compliance records. Records are retained only for the stated retention purpose and may be placed on legal hold for a documented lawful request.
+        Restricted Master Admin compliance records. Expired records are purged when they are not under legal hold. Sensitive purchase details require a documented review reason and every access is audited.
       </p>
       <div className="mt-6 overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -37,6 +37,7 @@ export default async function DeletedUsersPage() {
               <th className="p-2">Reason</th>
               <th className="p-2">Retention</th>
               <th className="p-2">Legal hold</th>
+              <th className="p-2">Review</th>
             </tr>
           </thead>
           <tbody>
@@ -49,6 +50,14 @@ export default async function DeletedUsersPage() {
                 <td className="p-2">{row.deletionReason || '—'}</td>
                 <td className="p-2">{row.retentionExpiresAt.toLocaleDateString()}</td>
                 <td className="p-2">{row.legalHold ? 'Yes' : 'No'}</td>
+                <td className="p-2">
+                  <Link
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                    href={`/admin/deleted-users/${row.id}`}
+                  >
+                    Review
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>
