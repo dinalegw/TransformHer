@@ -181,6 +181,20 @@ export async function sendWelcomeVerificationEmail(to: string, name: string, ver
   return sendMessage(to, getCourierTemplateId('COURIER_TEMPLATE_WELCOME_VERIFY'), { name, verifyLink }, 'welcome_verify')
 }
 
+export async function sendEmailVerificationCodeEmail(
+  to: string,
+  name: string,
+  code: string,
+  expiresInMinutes: number,
+) {
+  return sendMessage(
+    to,
+    getCourierTemplateId('COURIER_TEMPLATE_EMAIL_VERIFICATION_CODE'),
+    { name, code, expiresInMinutes },
+    'email_verification_code',
+  )
+}
+
 export async function sendEmailVerifiedEmail(to: string, name: string, libraryLink: string) {
   return sendMessage(to, getCourierTemplateId('COURIER_TEMPLATE_EMAIL_VERIFIED'), { name, libraryLink }, 'email_verified')
 }
