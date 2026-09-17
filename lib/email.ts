@@ -86,6 +86,7 @@ async function sendMessage(
         channels: {
           email: {
             override: {
+              from: `TransformHer <${SUPPORT_EMAIL}>`,
               reply_to: SUPPORT_EMAIL,
             },
           },
