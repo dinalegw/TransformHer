@@ -7,7 +7,7 @@ import { checkRateLimit } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   try {
-    const rateLimit = checkRateLimit(req, '/api/auth/forgot-password')
+    const rateLimit = await checkRateLimit(req, '/api/auth/forgot-password')
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many requests', retryAfter: rateLimit.retryAfter },
@@ -21,7 +21,6 @@ export async function POST(req: Request) {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase()
-    // Always return the same response to avoid leaking which emails are registered.
     const message = {
       message: 'If that email is registered, a reset link has been sent.',
     }
@@ -37,8 +36,6 @@ export async function POST(req: Request) {
     try {
       await sendPasswordResetEmail(normalizedEmail, resetLink)
     } catch (emailErr) {
-      // Preserve account privacy and avoid turning email-provider errors into
-      // an account-enumeration signal for callers.
       console.error('Forgot password email failed to send:', emailErr)
     }
 
