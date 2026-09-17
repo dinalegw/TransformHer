@@ -41,7 +41,13 @@ function signupSuccess(req: Request, mailSent: boolean) {
   const url = new URL('/signup', req.url)
   url.searchParams.set('created', '1')
   url.searchParams.set('mail', mailSent ? 'sent' : 'failed')
-  return NextResponse.redirect(url, 303)
+  const response = NextResponse.redirect(url, 303)
+
+  // Registration must never silently inherit or create an authenticated session.
+  // Clearing both names also removes legacy cookies left by older deployments.
+  response.cookies.delete('session')
+  response.cookies.delete('transformher_session')
+  return response
 }
 
 export async function POST(req: Request) {
