@@ -40,13 +40,20 @@ export async function POST(req: Request) {
     try {
       await sendLoginNotification(user.email, user.name)
     } catch (err) {
+      // Authentication must not fail because a notification provider is unavailable.
       console.error('Failed to send login notification:', err)
     }
 
     return res
   } catch (err) {
     console.error('Login error:', err)
-    const message = err instanceof Error ? err.message : 'Something went wrong'
-    return NextResponse.json({ error: message }, { status: 500 })
+
+    const unavailable = err instanceof Error &&
+      (err.message === 'Database not available' || err.message === 'User unavailable')
+
+    return NextResponse.json(
+      { error: unavailable ? 'Sign in is temporarily unavailable. Please try again.' : 'Unable to sign in right now.' },
+      { status: unavailable ? 503 : 500 },
+    )
   }
 }
