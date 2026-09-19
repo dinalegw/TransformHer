@@ -251,16 +251,15 @@ export async function updatePassword(email: string, password: string): Promise<b
 
 export async function updateUser(
   id: string,
-  updates: { name?: string; email?: string; username?: string; phone?: string; showFullName?: boolean },
+  updates: { name?: string; username?: string; phone?: string; showFullName?: boolean },
 ): Promise<boolean> {
   const db = await getDb()
   if (!db) return false
 
-  const values: Partial<Pick<DbUser, 'name' | 'email' | 'username' | 'phone' | 'showFullName' | 'updatedAt'>> = {
+  const values: Partial<Pick<DbUser, 'name' | 'username' | 'phone' | 'showFullName' | 'updatedAt'>> = {
     updatedAt: new Date(),
   }
   if (updates.name) values.name = updates.name.trim()
-  if (updates.email) values.email = normalizeEmail(updates.email)
   if (updates.username !== undefined) values.username = updates.username || null
   if (updates.phone !== undefined) values.phone = updates.phone || null
   if (updates.showFullName !== undefined) values.showFullName = updates.showFullName
