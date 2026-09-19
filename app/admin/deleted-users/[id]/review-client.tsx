@@ -81,12 +81,14 @@ export function DeletedUserReviewClient({ archiveId }: { archiveId: string }) {
     setError('')
     setNotice('')
     try {
-      const params = new URLSearchParams({ reason: trimmedReason })
-      if (reference.trim()) params.set('reference', reference.trim())
-
-      const res = await fetch(`/api/admin/deleted-users/${encodeURIComponent(archiveId)}?${params.toString()}`, {
-        method: 'GET',
+      const res = await fetch(`/api/admin/deleted-users/${encodeURIComponent(archiveId)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
+        body: JSON.stringify({
+          reason: trimmedReason,
+          reference: reference.trim() || undefined,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || 'Unable to load retained details.')

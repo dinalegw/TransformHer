@@ -4,29 +4,58 @@ import {
   getDeletedArchiveForCompliance,
   setDeletedArchiveLegalHold,
 } from '@/lib/compliance'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
-export async function GET(
+function limited(retryAfter?: number) {
+  const seconds = retryAfter ?? 60
+  return NextResponse.json(
+    { error: 'Too many compliance requests. Please wait and try again.', retryAfter: seconds },
+    { status: 429, headers: { 'Retry-After': String(seconds) } },
+  )
+}
+
+/**
+ * Retained personal/security data is deliberately disclosed through POST rather
+ * than query parameters. A documented purpose or lawful-request reference can
+ * contain sensitive case information and must not be copied into browser
+ * history, proxy URLs or ordinary access logs.
+ */
+export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    if (!isSameOriginRequest(req)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
+    const rate = await checkRateLimit(req, '/api/admin/deleted-users/review')
+    if (!rate.allowed) return limited(rate.retryAfter)
+
     const admin = await requireMasterAdmin()
     const { id } = await params
-    const { searchParams } = new URL(req.url)
-    const reason = searchParams.get('reason')?.trim() || ''
-    const reference = searchParams.get('reference')?.trim() || undefined
+    const body = await req.json().catch(() => ({}))
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    const reference = typeof body.reference === 'string' ? body.reference.trim() : undefined
 
-    if (reason.length < 5) {
+    if (reason.length < 5 || reason.length > 500) {
       return NextResponse.json(
-        { error: 'A compliance reason is required to view retained details.' },
+        { error: 'A compliance reason between 5 and 500 characters is required to view retained details.' },
         { status: 400 },
       )
+    }
+    if (reference && reference.length > 200) {
+      return NextResponse.json({ error: 'Case reference must be 200 characters or fewer.' }, { status: 400 })
     }
 
     const archive = await getDeletedArchiveForCompliance(id, admin, reason, reference)
     if (!archive) return NextResponse.json({ error: 'Archive not found' }, { status: 404 })
 
-    return NextResponse.json({ archive })
+    return NextResponse.json(
+      { archive },
+      { headers: { 'Cache-Control': 'no-store, private' } },
+    )
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -44,20 +73,28 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const origin = req.headers.get('origin')
-    if (origin && new URL(origin).host !== new URL(req.url).host) {
+    if (!isSameOriginRequest(req)) {
       return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
     }
+
+    const rate = await checkRateLimit(req, '/api/admin/deleted-users/legal-hold')
+    if (!rate.allowed) return limited(rate.retryAfter)
 
     const admin = await requireMasterAdmin()
     const { id } = await params
     const body = await req.json().catch(() => ({}))
     const action = typeof body.action === 'string' ? body.action : ''
-    const reason = typeof body.reason === 'string' ? body.reason : ''
-    const reference = typeof body.reference === 'string' ? body.reference : undefined
+    const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    const reference = typeof body.reference === 'string' ? body.reference.trim() : undefined
 
     if (action !== 'legal_hold' && action !== 'release_hold') {
       return NextResponse.json({ error: 'Unsupported compliance action' }, { status: 400 })
+    }
+    if (reason.length > 500) {
+      return NextResponse.json({ error: 'Compliance reason must be 500 characters or fewer.' }, { status: 400 })
+    }
+    if (reference && reference.length > 200) {
+      return NextResponse.json({ error: 'Case reference must be 200 characters or fewer.' }, { status: 400 })
     }
 
     const result = await setDeletedArchiveLegalHold(
@@ -68,7 +105,7 @@ export async function PATCH(
       reference,
     )
 
-    return NextResponse.json(result)
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store, private' } })
   } catch (err) {
     if (err instanceof Error && err.message.includes('Unauthorized')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
