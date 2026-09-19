@@ -1,5 +1,5 @@
 import 'server-only'
-import { eq, and, lte } from 'drizzle-orm'
+import { eq, and, lte, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { userPurchases, cart as cartTable, books } from '@/lib/db/schema'
 
@@ -101,29 +101,48 @@ export async function addToLibrary(userId: string, bookId: number, bookSlug: str
   })
 }
 
+/**
+ * Atomically record a paid entitlement once.
+ *
+ * A user can submit the same successful Paystack reference from multiple tabs
+ * or two Vercel instances can process the same confirmation concurrently. The
+ * transaction-scoped advisory lock serializes writes for one user/book pair so
+ * duplicate purchase rows and duplicate confirmation emails are prevented even
+ * on legacy databases where the historical unique index could not be created.
+ *
+ * Returns true only when this call created the entitlement.
+ */
 export async function recordPurchase(
   userId: string,
   bookId: number,
   bookSlug: string,
   paymentReference?: string,
-): Promise<void> {
+): Promise<boolean> {
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
-  const existing = await db.select({ id: userPurchases.id })
-    .from(userPurchases)
-    .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookId, bookId)))
-    .limit(1)
-  if (existing.length > 0) return
+  return db.transaction(async (tx) => {
+    const lockKey = `${userId}:${bookId}`
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`)
 
-  const releaseAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
-  await db.insert(userPurchases).values({
-    userId,
-    bookId,
-    bookSlug,
-    paymentReference,
-    released: false,
-    releaseAt,
+    const existing = await tx.select({ id: userPurchases.id })
+      .from(userPurchases)
+      .where(and(eq(userPurchases.userId, userId), eq(userPurchases.bookId, bookId)))
+      .limit(1)
+
+    if (existing.length > 0) return false
+
+    const releaseAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+    await tx.insert(userPurchases).values({
+      userId,
+      bookId,
+      bookSlug,
+      paymentReference,
+      released: false,
+      releaseAt,
+    })
+
+    return true
   })
 }
 

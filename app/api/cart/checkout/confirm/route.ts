@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { verifyPaystackPayment } from '@/lib/paystack'
-import { getLibraryItem, recordPurchase, removeFromCart } from '@/lib/library'
+import { recordPurchase, removeFromCart } from '@/lib/library'
 import { getAllMergedBooks } from '@/lib/admin-books'
 import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
 import { formatPrice } from '@/lib/format'
@@ -24,7 +24,8 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { reference } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { reference } = body
     if (!isReference(reference)) {
       return NextResponse.json({ error: 'A valid reference is required' }, { status: 400 })
     }
@@ -34,6 +35,9 @@ export async function POST(req: Request) {
     const metadata = payment?.metadata
     if (!result.status || payment?.status !== 'success' || !metadata?.cartCheckout) {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 402 })
+    }
+    if (payment.reference && payment.reference !== reference) {
+      return NextResponse.json({ error: 'Payment reference mismatch' }, { status: 402 })
     }
     if (metadata.userId !== user.id) {
       return NextResponse.json({ error: 'Payment does not belong to this account' }, { status: 403 })
@@ -77,18 +81,19 @@ export async function POST(req: Request) {
       ? expectedMinorFromSnapshot
       : fallbackExpectedMinor
 
-    if (payment.currency !== expectedCurrency || verifiedMinor !== expectedMinor) {
+    if (
+      !Number.isSafeInteger(verifiedMinor)
+      || payment.currency !== expectedCurrency
+      || verifiedMinor !== expectedMinor
+    ) {
       return NextResponse.json({ error: 'Payment amount mismatch' }, { status: 402 })
     }
 
     const newlyRecorded = [] as NonNullable<(typeof purchasedBooks)[number]>[]
     for (const book of purchasedBooks) {
       if (!book) continue
-      const existing = await getLibraryItem(user.id, book.id)
-      if (!existing) {
-        await recordPurchase(user.id, book.id, book.slug, payment.reference)
-        newlyRecorded.push(book)
-      }
+      const recorded = await recordPurchase(user.id, book.id, book.slug, payment.reference)
+      if (recorded) newlyRecorded.push(book)
       await removeFromCart(user.id, book.id)
     }
 

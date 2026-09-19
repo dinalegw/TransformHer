@@ -18,7 +18,8 @@ export async function POST(req: Request) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { bookSlug } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const bookSlug = body.bookSlug
   if (typeof bookSlug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(bookSlug)) {
     return NextResponse.json({ error: 'A valid bookSlug is required' }, { status: 400 })
   }
@@ -31,13 +32,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'You already own this book' }, { status: 409 })
   }
 
+  const expectedAmountMinor = Math.round(Number(book.price) * 100)
+  if (!Number.isSafeInteger(expectedAmountMinor) || expectedAmountMinor <= 0) {
+    return NextResponse.json({ error: 'This book does not have a valid checkout price.' }, { status: 400 })
+  }
+
   const reference = `TX-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`
   const result = await initializePaystackPayment({
     email: user.email,
-    amount: Number(book.price),
+    amount: expectedAmountMinor / 100,
     currency: book.currency,
     reference,
-    metadata: { userId: user.id, bookSlug, bookTitle: book.title },
+    metadata: {
+      userId: user.id,
+      bookSlug,
+      bookTitle: book.title,
+      expectedAmountMinor,
+      expectedCurrency: book.currency,
+    },
     callback_url: `${getBaseUrl()}/books/${bookSlug}?purchased=true`,
   })
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { getBookBySlug } from '@/lib/books'
-import { getLibraryItem, recordPurchase } from '@/lib/library'
+import { recordPurchase } from '@/lib/library'
 import { verifyPaystackPayment } from '@/lib/paystack'
 import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
 import { formatPrice } from '@/lib/format'
@@ -24,7 +24,8 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { reference, bookSlug } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { reference, bookSlug } = body
     if (!isReference(reference) || typeof bookSlug !== 'string') {
       return NextResponse.json({ error: 'A valid payment reference and book slug are required' }, { status: 400 })
     }
@@ -38,21 +39,37 @@ export async function POST(req: Request) {
     if (!result.status || payment?.status !== 'success' || !metadata) {
       return NextResponse.json({ error: 'Payment verification failed' }, { status: 402 })
     }
+    if (payment.reference && payment.reference !== reference) {
+      return NextResponse.json({ error: 'Payment reference mismatch' }, { status: 402 })
+    }
     if (metadata.cartCheckout || metadata.userId !== user.id || metadata.bookSlug !== book.slug) {
       return NextResponse.json({ error: 'Payment does not match this purchase' }, { status: 403 })
     }
     if (payment.customer?.email?.trim().toLowerCase() !== user.email.trim().toLowerCase()) {
       return NextResponse.json({ error: 'Payment email does not match this account' }, { status: 403 })
     }
-    if (payment.currency !== book.currency || Number(payment.amount) !== Math.round(Number(book.price) * 100)) {
+
+    const verifiedMinor = Number(payment.amount)
+    const snapshotMinor = Number(metadata.expectedAmountMinor)
+    const expectedMinor = Number.isSafeInteger(snapshotMinor) && snapshotMinor > 0
+      ? snapshotMinor
+      : Math.round(Number(book.price) * 100)
+    const expectedCurrency = typeof metadata.expectedCurrency === 'string'
+      ? metadata.expectedCurrency
+      : book.currency
+
+    if (
+      !Number.isSafeInteger(verifiedMinor)
+      || payment.currency !== expectedCurrency
+      || verifiedMinor !== expectedMinor
+    ) {
       return NextResponse.json({ error: 'Payment amount mismatch' }, { status: 402 })
     }
 
-    const existing = await getLibraryItem(user.id, book.id)
-    if (!existing) {
-      await recordPurchase(user.id, book.id, book.slug, payment.reference)
+    const recorded = await recordPurchase(user.id, book.id, book.slug, payment.reference)
 
-      const amount = formatPrice(Number(payment.amount) / 100, payment.currency ?? book.currency)
+    if (recorded) {
+      const amount = formatPrice(verifiedMinor / 100, payment.currency ?? book.currency)
       const customerName = payment.customer?.first_name
         ? `${payment.customer.first_name} ${payment.customer.last_name ?? ''}`.trim()
         : user.name
@@ -73,7 +90,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, alreadyRecorded: Boolean(existing) })
+    return NextResponse.json({ success: true, alreadyRecorded: !recorded })
   } catch (error) {
     console.error('[paystack] single-book confirmation failed', { error })
     return NextResponse.json({ error: 'Unable to confirm payment. Please contact support with your reference.' }, { status: 500 })
