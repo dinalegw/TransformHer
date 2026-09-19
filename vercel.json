@@ -2,20 +2,16 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "app/api/admin/books/upload/route.ts": {
-      "maxDuration": 60,
-      "memory": 1024
+      "maxDuration": 60
     },
     "app/api/books/**/read/route.ts": {
-      "maxDuration": 60,
-      "memory": 512
+      "maxDuration": 60
     },
     "app/api/cart/checkout/route.ts": {
-      "maxDuration": 30,
-      "memory": 512
+      "maxDuration": 30
     },
     "app/api/paystack/**/route.ts": {
-      "maxDuration": 30,
-      "memory": 512
+      "maxDuration": 30
     }
   },
   "regions": ["iad1"],

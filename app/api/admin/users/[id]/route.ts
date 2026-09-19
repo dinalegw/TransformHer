@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireMasterAdmin, getUserById, setUserAdmin } from '@/lib/auth'
 import { getDefaultPermissions, ALL_PERMISSIONS, type Permission } from '@/lib/permissions'
+import { checkRateLimit } from '@/lib/rate-limit'
 import {
   archiveAndDeleteUser,
   archiveUser,
@@ -9,14 +10,38 @@ import {
   unfreezeUser,
 } from '@/lib/account-lifecycle'
 
+function sameOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin')
+  if (!origin) return true
+  try {
+    return new URL(origin).host === new URL(req.url).host
+  } catch {
+    return false
+  }
+}
+
+function rateLimited(retryAfter: number) {
+  return NextResponse.json(
+    { error: 'Too many admin account changes. Please wait and try again.', retryAfter },
+    { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+  )
+}
+
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!sameOrigin(req)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
+    const rate = await checkRateLimit(req, '/api/admin/users/update')
+    if (!rate.allowed) return rateLimited(rate.retryAfter)
+
     const admin = await requireMasterAdmin()
     const { id } = await params
     const target = await getUserById(id)
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 })
 
-    const body = await req.json()
+    const body = await req.json().catch(() => ({}))
     const action = typeof body.action === 'string' ? body.action : null
 
     if (action) {
@@ -28,7 +53,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
 
       if (action === 'freeze') {
-        await freezeUser(id, admin, String(body.reason || 'Frozen by Master Admin'))
+        const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 500) : ''
+        await freezeUser(id, admin, reason || 'Frozen by Master Admin')
         return NextResponse.json({ success: true, status: 'frozen' })
       }
       if (action === 'unfreeze') {
@@ -67,8 +93,20 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
     }
 
-    if (body.rank !== undefined) updates.rank = body.rank
-    if (body.title !== undefined) updates.title = String(body.title)
+    if (body.rank !== undefined) {
+      if (!['junior', 'senior', 'lead', 'master'].includes(body.rank)) {
+        return NextResponse.json({ error: 'Invalid admin rank' }, { status: 400 })
+      }
+      updates.rank = body.rank
+    }
+
+    if (body.title !== undefined) {
+      const title = String(body.title).trim()
+      if (title.length > 100) {
+        return NextResponse.json({ error: 'Admin title must be 100 characters or fewer.' }, { status: 400 })
+      }
+      updates.title = title
+    }
 
     if (body.permissions !== undefined) {
       if (target.role === 'master_admin') {
@@ -77,7 +115,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       if (!Array.isArray(body.permissions)) {
         return NextResponse.json({ error: 'Permissions must be an array' }, { status: 400 })
       }
-      updates.permissions = body.permissions.filter((p: string) => ALL_PERMISSIONS.includes(p as Permission))
+      const invalidPermission = body.permissions.find(
+        (permission: unknown) => typeof permission !== 'string' || !ALL_PERMISSIONS.includes(permission as Permission),
+      )
+      if (invalidPermission !== undefined) {
+        return NextResponse.json({ error: 'One or more permissions are invalid.' }, { status: 400 })
+      }
+      updates.permissions = body.permissions as Permission[]
     }
 
     const updated = await setUserAdmin(id, updates)
@@ -93,6 +137,13 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    if (!sameOrigin(req)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
+    const rate = await checkRateLimit(req, '/api/admin/users/delete')
+    if (!rate.allowed) return rateLimited(rate.retryAfter)
+
     const admin = await requireMasterAdmin()
     const { id } = await params
     if (id === admin.id) {
@@ -106,10 +157,15 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     }
 
     const body = await req.json().catch(() => ({}))
+    const requestedReason = typeof body.reason === 'string' ? body.reason.trim() : ''
+    if (requestedReason.length > 500) {
+      return NextResponse.json({ error: 'Deletion reason must be 500 characters or fewer.' }, { status: 400 })
+    }
+
     await archiveAndDeleteUser(
       id,
       admin,
-      String(body.reason || 'Deleted by Master Admin'),
+      requestedReason || 'Deleted by Master Admin',
       'master_admin',
     )
 
