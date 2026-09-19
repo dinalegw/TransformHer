@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
 import {
   createUser,
-  generateEmailVerificationToken,
   validateEmail,
   validatePassword,
   validateName,
 } from '@/lib/auth'
+import { generateEmailVerificationLinkToken } from '@/lib/email-verification-link'
 import { sendWelcomeVerificationEmail, waitForCourierDispatch } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
@@ -84,28 +84,35 @@ export async function POST(req: Request) {
 
     // Account creation and authentication are intentionally separate. A new user
     // is not issued a session cookie until they explicitly sign in.
-    const token = generateEmailVerificationToken(user.email)
-    const verifyLink = `${getBaseUrl()}/verify-email?token=${token}`
+    //
+    // Email delivery happens after the account transaction. If Courier or token
+    // generation is temporarily unavailable, the account remains valid and the
+    // user can later verify from Profile using the six-digit code flow.
     let verificationEmailSent = false
-
     try {
-      const receipt = await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
-      const dispatch = await waitForCourierDispatch(receipt.requestId)
-      verificationEmailSent = dispatch.state !== 'failed'
-
-      if (dispatch.state === 'failed') {
-        console.error('Welcome verification email failed in Courier:', {
-          requestId: receipt.requestId,
-          status: dispatch.status,
-        })
+      const token = await generateEmailVerificationLinkToken(user.id, user.email)
+      if (!token) {
+        console.warn('[auth/register] verification link was not generated', { userId: user.id })
       } else {
-        console.info('Welcome verification email request accepted:', {
-          requestId: receipt.requestId,
-          status: dispatch.status,
-        })
+        const verifyLink = `${getBaseUrl()}/verify-email?token=${token}`
+        const receipt = await sendWelcomeVerificationEmail(user.email, user.name, verifyLink)
+        const dispatch = await waitForCourierDispatch(receipt.requestId)
+        verificationEmailSent = dispatch.state !== 'failed'
+
+        if (dispatch.state === 'failed') {
+          console.error('Welcome verification email failed in Courier:', {
+            requestId: receipt.requestId,
+            status: dispatch.status,
+          })
+        } else {
+          console.info('Welcome verification email request accepted:', {
+            requestId: receipt.requestId,
+            status: dispatch.status,
+          })
+        }
       }
     } catch (err) {
-      console.error('Failed to send welcome email:', err)
+      console.error('Failed to prepare or send welcome verification email:', err)
     }
 
     if (htmlForm) return signupSuccess(req, verificationEmailSent)
