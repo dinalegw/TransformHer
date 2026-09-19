@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  if (pathname === '/' || pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/icon') || pathname.startsWith('/apple-icon') || pathname.startsWith('/books/') || pathname === '/hero-reading.png') {
+  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/icon') || pathname.startsWith('/apple-icon') || pathname === '/hero-reading.png') {
     return NextResponse.next()
   }
 

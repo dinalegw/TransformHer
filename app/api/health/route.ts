@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
 import { getDb } from '@/lib/db/connection'
 import { getCourierTemplateId } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
@@ -42,8 +43,45 @@ function templateReady(key: string): boolean {
 }
 
 export async function GET() {
-  const checks: Record<string, { set: boolean; note?: string }> = {}
+  const publicBaseUrl = getBaseUrl()
+  const db = await getDb()
+  const databaseConnection = getDatabaseConnection()
+  const scalingReady = Boolean(db) && databaseConnection.pooledPreferred
+  const mailReady = Boolean(process.env.COURIER_API_KEY)
+    && REQUIRED_EMAIL_TEMPLATES.every((key) => templateReady(key))
+  const coreReady = REQUIRED_CONFIG_VARS.every((key) => Boolean(process.env[key]))
+    && mailReady
+    && Boolean(db)
+  const storageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+  const status = coreReady ? (storageReady && scalingReady ? 'ok' : 'degraded') : 'error'
 
+  // Public health output intentionally exposes readiness only. Detailed
+  // environment/template/database diagnostics are operational metadata and are
+  // returned only to an authenticated Master Admin.
+  let masterAdmin = false
+  try {
+    masterAdmin = (await getCurrentUser())?.role === 'master_admin'
+  } catch {
+    masterAdmin = false
+  }
+
+  const base = {
+    status,
+    coreReady,
+    mailReady,
+    storageReady,
+    scalingReady,
+    publicBaseUrl,
+  }
+
+  if (!masterAdmin) {
+    return NextResponse.json(base, {
+      status: coreReady ? 200 : 503,
+      headers: { 'Cache-Control': 'no-store' },
+    })
+  }
+
+  const checks: Record<string, { set: boolean; note?: string }> = {}
   for (const key of REQUIRED_CONFIG_VARS) {
     const val = process.env[key]
     checks[key] = {
@@ -67,54 +105,33 @@ export async function GET() {
     }
   }
 
-  const publicBaseUrl = getBaseUrl()
   checks.TRANSFORMHER_PUBLIC_URL = {
     set: publicBaseUrl === 'https://transformher.vercel.app' || Boolean(process.env.TRANSFORMHER_PUBLIC_URL),
     note: `customer-facing links resolve to ${publicBaseUrl}`,
   }
-
   checks.NEXT_PUBLIC_BASE_URL = {
     set: Boolean(process.env.NEXT_PUBLIC_BASE_URL),
     note: process.env.NEXT_PUBLIC_BASE_URL
       ? 'configured as a local/preview fallback'
       : 'not required in Production; canonical customer links use TRANSFORMHER_PUBLIC_URL / the production hostname',
   }
-
   checks.BLOB_READ_WRITE_TOKEN = {
-    set: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
-    note: process.env.BLOB_READ_WRITE_TOKEN
+    set: storageReady,
+    note: storageReady
       ? undefined
       : 'MISSING — production admin book uploads are disabled until persistent Blob storage is connected',
   }
-
   checks.VERCEL_URL = {
     set: Boolean(process.env.VERCEL_URL),
     note: 'deployment URL is never used for production customer-facing transactional links',
   }
-
-  // Connectivity only. Never return credentials or database data.
-  const db = await getDb()
   checks.DATABASE = {
     set: Boolean(db),
     note: db ? undefined : 'database unavailable',
   }
 
-  const databaseConnection = getDatabaseConnection()
-  const scalingReady = Boolean(db) && databaseConnection.pooledPreferred
-  const mailReady = Boolean(process.env.COURIER_API_KEY)
-    && REQUIRED_EMAIL_TEMPLATES.every((key) => templateReady(key))
-  const coreReady = REQUIRED_CONFIG_VARS.every((key) => Boolean(process.env[key]))
-    && mailReady
-    && Boolean(db)
-  const storageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
-
   return NextResponse.json({
-    status: coreReady ? (storageReady && scalingReady ? 'ok' : 'degraded') : 'error',
-    coreReady,
-    mailReady,
-    storageReady,
-    scalingReady,
-    publicBaseUrl,
+    ...base,
     scaling: {
       ...SCALING_POLICY,
       databaseConnectionSource: databaseConnection.source,
