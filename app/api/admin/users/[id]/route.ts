@@ -34,7 +34,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
 
     const rate = await checkRateLimit(req, '/api/admin/users/update')
-    if (!rate.allowed) return rateLimited(rate.retryAfter)
+    if (!rate.allowed) return rateLimited(rate.retryAfter ?? 60)
 
     const admin = await requireMasterAdmin()
     const { id } = await params
@@ -142,7 +142,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     }
 
     const rate = await checkRateLimit(req, '/api/admin/users/delete')
-    if (!rate.allowed) return rateLimited(rate.retryAfter)
+    if (!rate.allowed) return rateLimited(rate.retryAfter ?? 60)
 
     const admin = await requireMasterAdmin()
     const { id } = await params
