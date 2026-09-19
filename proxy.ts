@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
-import { checkRateLimit, applyRateLimitHeaders } from '@/lib/rate-limit'
+import { applyRateLimitHeaders } from '@/lib/rate-limit'
 import { getRequestId } from '@/lib/request-id'
 import { getCurrentUser } from '@/lib/auth'
 
@@ -104,23 +104,10 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith('/api/')) {
-    const rateLimit = await checkRateLimit(request, pathname)
-    if (!rateLimit.allowed) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Too many requests', retryAfter: rateLimit.retryAfter }),
-        {
-          status: 429,
-          headers: {
-            'Content-Type': 'application/json',
-            'Retry-After': String(rateLimit.retryAfter),
-            'X-Request-ID': requestId,
-            ...Object.fromEntries(
-              Object.entries(securityHeaders).filter(([, v]) => v !== csp)
-            ),
-          },
-        }
-      )
-    }
+    // Route handlers own the authoritative shared rate-limit check. Running the
+    // same limiter here and again inside the route counted one browser request
+    // twice (for example, a 5-attempt login limit became effectively 2 full
+    // attempts). Proxy only advertises the configured limit headers.
     applyRateLimitHeaders(response, pathname)
   }
 
