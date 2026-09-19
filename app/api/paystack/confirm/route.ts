@@ -6,12 +6,17 @@ import { verifyPaystackPayment } from '@/lib/paystack'
 import { sendPurchaseConfirmation, sendAdminOrderNotification } from '@/lib/email'
 import { formatPrice } from '@/lib/format'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 function isReference(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,160}$/.test(value)
 }
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   const rateLimit = await checkRateLimit(req, '/api/paystack/confirm')
   if (!rateLimit.allowed) {
     return NextResponse.json(

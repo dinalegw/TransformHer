@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { verifyPaystackPayment } from '@/lib/paystack'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 function isReference(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9_-]{8,160}$/.test(value)
@@ -12,6 +13,10 @@ function isReference(value: unknown): value is string {
  * happen in the dedicated confirmation routes, where amount/items are checked.
  */
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   const rateLimit = await checkRateLimit(req, '/api/paystack/verify')
   if (!rateLimit.allowed) {
     return NextResponse.json(
@@ -24,7 +29,8 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { reference } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { reference } = body
     if (!isReference(reference)) {
       return NextResponse.json({ error: 'A valid reference is required' }, { status: 400 })
     }

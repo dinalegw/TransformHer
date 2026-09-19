@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { fetchCart, getCartItem, addToCart, removeFromCart, getLibraryItem } from '@/lib/library'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -11,6 +12,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -19,10 +24,10 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { bookId: rawId } = await req.json()
-    const bookId = Number(rawId)
-    if (!bookId) {
-      return NextResponse.json({ error: 'bookId is required' }, { status: 400 })
+    const body = await req.json().catch(() => ({}))
+    const bookId = Number(body.bookId)
+    if (!Number.isSafeInteger(bookId) || bookId <= 0) {
+      return NextResponse.json({ error: 'A valid bookId is required' }, { status: 400 })
     }
 
     const owned = await getLibraryItem(user.id, bookId)
@@ -44,14 +49,18 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { bookId: rawId } = await req.json()
-    const bookId = Number(rawId)
-    if (!bookId) {
-      return NextResponse.json({ error: 'bookId is required' }, { status: 400 })
+    const body = await req.json().catch(() => ({}))
+    const bookId = Number(body.bookId)
+    if (!Number.isSafeInteger(bookId) || bookId <= 0) {
+      return NextResponse.json({ error: 'A valid bookId is required' }, { status: 400 })
     }
 
     await removeFromCart(user.id, bookId)

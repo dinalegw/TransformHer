@@ -5,8 +5,13 @@ import { initializePaystackPayment } from '@/lib/paystack'
 import { getAllMergedBooks } from '@/lib/admin-books'
 import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   const rateLimit = await checkRateLimit(req, '/api/cart/checkout')
   if (!rateLimit.allowed) {
     return NextResponse.json(
