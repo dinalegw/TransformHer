@@ -38,33 +38,47 @@ export async function proxy(request: NextRequest) {
   }
 
   const sessionToken = request.cookies.get('session')?.value
-  const user = sessionToken ? verifyToken(sessionToken) : null
-  const isAuthenticated = !!user
+  const signedSession = sessionToken ? verifyToken(sessionToken) : null
+  let resolvedCurrentUser: Awaited<ReturnType<typeof getCurrentUser>> | undefined
+
+  const resolveCurrentUser = async () => {
+    if (resolvedCurrentUser !== undefined) return resolvedCurrentUser
+    resolvedCurrentUser = signedSession ? await getCurrentUser() : null
+    return resolvedCurrentUser
+  }
 
   if (pathname.startsWith('/admin')) {
-    if (!isAuthenticated) {
+    if (!signedSession) {
       const loginUrl = new URL('/login', request.url)
       loginUrl.searchParams.set('redirect', pathname)
       return NextResponse.redirect(loginUrl)
     }
-    const currentUser = await getCurrentUser()
+    const currentUser = await resolveCurrentUser()
     if (!currentUser || !currentUser.isAdmin) {
       return NextResponse.redirect(new URL('/', request.url))
     }
   }
 
   if (pathname.startsWith('/api/admin')) {
-    if (!isAuthenticated) {
+    if (!signedSession) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const currentUser = await getCurrentUser()
+    const currentUser = await resolveCurrentUser()
     if (!currentUser || !currentUser.isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
 
-  if (AUTH_ROUTES.some(route => pathname === route) && isAuthenticated) {
-    return NextResponse.redirect(new URL('/', request.url))
+  if (AUTH_ROUTES.some(route => pathname === route) && signedSession) {
+    // A cryptographically valid cookie is not necessarily an active session:
+    // freezing, archiving, password reset and role changes bump tokenVersion.
+    // Only redirect away from login/signup when the live database-backed
+    // session is still valid. A frozen user with a stale cookie must be able to
+    // reach /login and receive the proper account-status/support message.
+    const currentUser = await resolveCurrentUser()
+    if (currentUser) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
   }
 
   const response = NextResponse.next()
