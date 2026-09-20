@@ -34,12 +34,12 @@ At the latest repository and production audit on 20 September 2026:
 
 As of **20 September 2026**, the production baseline verified in this audit is:
 
-- `main` commit `c70247774ce2da3b1650dd88dec18715c05652ec`
+- `main` commit `2e49640e34c5422e42cbe9016b5f0347ae2f251c`
 - CI: install, TypeScript, ESLint, Vitest and production build all passing
 - Vercel production deployment: READY on `https://transformher.vercel.app`
 - current production deployment runtime audit: no error or warning logs observed after the latest deployment verification; a prior admin-seed configuration error was traced to an older preview deployment and production auto-seeding has since been disabled
 - authentication, Courier configuration, database connectivity and pooled database scaling checks are healthy
-- multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only
+- multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only and repeated script readiness callbacks are de-duplicated so the language selector renders once
 - production smoke checks are available through `npm run smoke:prod` and the manual `Production smoke` GitHub Actions workflow
 - production cold-start seeding is disabled by default
 - the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected (tracked in issue #3)
