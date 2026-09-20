@@ -4,6 +4,7 @@ import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { eq } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { user as userTable } from '@/lib/db/schema'
+import { updatePasswordIfTokenVersion } from '@/lib/auth'
 
 interface ResetPayload {
   type: 'password_reset'
@@ -116,4 +117,26 @@ export async function verifyPasswordResetToken(token: string): Promise<string | 
   if ((user.tokenVersion ?? 0) !== payload.tokenVersion) return null
 
   return user.email
+}
+
+/**
+ * Consume a reset token and update the password in one version-checked database
+ * mutation. The first successful consumer increments tokenVersion; a concurrent
+ * replay using the same token then fails its expected-version condition.
+ */
+export async function consumePasswordResetToken(
+  token: string,
+  password: string,
+): Promise<string | null> {
+  const payload = verifySignature(token)
+  if (!payload || payload.exp < Date.now()) return null
+
+  const email = normalizeEmail(payload.email)
+  const consumed = await updatePasswordIfTokenVersion(
+    email,
+    password,
+    payload.tokenVersion,
+  )
+
+  return consumed ? email : null
 }
