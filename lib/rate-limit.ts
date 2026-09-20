@@ -12,6 +12,7 @@ const RATE_LIMITS: Record<string, { limit: number; windowMs: number }> = {
   '/api/auth/email-verification-code/request': { limit: 3, windowMs: 60_000 },
   '/api/auth/email-verification-code/confirm': { limit: 8, windowMs: 5 * 60_000 },
   '/api/auth/verify-email': { limit: 10, windowMs: 5 * 60_000 },
+  '/api/auth/me/update': { limit: 20, windowMs: 60_000 },
   '/api/account/delete': { limit: 3, windowMs: 5 * 60_000 },
   '/api/admin/orders/unlock': { limit: 10, windowMs: 60_000 },
   '/api/admin/users/update': { limit: 20, windowMs: 60_000 },

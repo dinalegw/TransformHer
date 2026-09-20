@@ -66,7 +66,7 @@ async function readBody(req: Request): Promise<{ email: unknown; password: unkno
     }
   }
 
-  const body = await req.json()
+  const body = await req.json().catch(() => null)
   return { email: body?.email, password: body?.password, redirect: body?.redirect, htmlForm }
 }
 

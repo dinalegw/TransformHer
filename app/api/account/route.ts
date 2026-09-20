@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { authenticateUser, getCurrentUser } from '@/lib/auth'
 import { archiveAndDeleteUser } from '@/lib/account-lifecycle'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 export async function DELETE(req: Request) {
   try {
@@ -14,8 +15,7 @@ export async function DELETE(req: Request) {
       )
     }
 
-    const origin = req.headers.get('origin')
-    if (origin && new URL(origin).host !== new URL(req.url).host) {
+    if (!isSameOriginRequest(req)) {
       return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
     }
 

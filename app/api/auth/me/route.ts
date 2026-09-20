@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getCurrentUser, isEmailVerified, updateUser, validateName } from '@/lib/auth'
 import { getDb } from '@/lib/db/connection'
 import { isSameOriginRequest } from '@/lib/request-security'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 async function ensureDatabaseAvailable() {
   const db = await getDb()
@@ -10,6 +11,15 @@ async function ensureDatabaseAvailable() {
 
 export async function GET() {
   try {
+    const rate = await checkRateLimit(req, '/api/auth/me/update')
+    if (!rate.allowed) {
+      const retryAfter = rate.retryAfter ?? 60
+      return NextResponse.json(
+        { error: 'Too many profile updates. Please wait and try again.', retryAfter },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      )
+    }
+
     if (!(await ensureDatabaseAvailable())) {
       return NextResponse.json(
         { error: 'Account service is temporarily unavailable.' },
