@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 
 export function PurchaseConfirmation({ bookSlug, reference }: { bookSlug: string; reference?: string }) {
+  const router = useRouter()
   const started = useRef(false)
   const [state, setState] = useState<'loading' | 'success' | 'error'>(reference ? 'loading' : 'error')
 
@@ -18,9 +20,10 @@ export function PurchaseConfirmation({ bookSlug, reference }: { bookSlug: string
       .then(async response => {
         if (!response.ok) throw new Error('Payment confirmation failed')
         setState('success')
+        router.refresh()
       })
       .catch(() => setState('error'))
-  }, [bookSlug, reference])
+  }, [bookSlug, reference, router])
 
   if (state === 'loading') {
     return <div className="mb-8 flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-4 text-sm"><Loader2 className="size-4 animate-spin" /> Verifying your payment securely…</div>
