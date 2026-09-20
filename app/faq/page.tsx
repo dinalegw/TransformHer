@@ -104,6 +104,18 @@ const FAQS = [
     a: 'Check your spam/junk folder and confirm that you used the correct account email. You can retry the relevant verification or password-recovery flow after its cooldown. If the message still does not arrive, contact support.',
   },
   {
+    q: 'If the verification email fails to send, is my new account lost?',
+    a: 'No. Account creation and email delivery are handled separately. If the mail provider has a temporary problem after your account is created, the account remains valid. You can sign in later and use the Profile verification-code flow or retry the relevant verification step.',
+  },
+  {
+    q: 'Why can I still see the Sign in page after my account was frozen or my session was invalidated?',
+    a: 'That is intentional. TransformHer checks the live account and session state before redirecting away from authentication pages. A stale cookie is not treated as a valid active session, so affected users can reach the correct recovery or account-status message instead of being trapped in a redirect loop.',
+  },
+  {
+    q: 'How does TransformHer protect actions such as checkout, cart changes and account administration?',
+    a: 'Authenticated state-changing requests are checked against the signed-in account, protected with shared rate limits where appropriate, and reject explicit cross-origin browser requests. Sensitive admin actions also require the relevant administrator role or permission.',
+  },
+  {
     q: 'How do I contact support?',
     a: `Email ${SUPPORT_EMAIL}. For purchase problems, include your TransformHer account email and payment reference, but never send your password, card PIN, OTP, full card number, or authentication token.`,
   },

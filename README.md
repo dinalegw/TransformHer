@@ -17,10 +17,13 @@ At the latest repository and production audit on 20 September 2026:
 - Courier uses the TransformHer sender identity and `transformher360@gmail.com` as the official support / reply-to address.
 - Registration verification links are bound to the exact account ID, normalized email and current `tokenVersion`; old links cannot verify a replacement account that later reuses the same email.
 - Verification links use a protected POST mutation after the verification page loads rather than changing account state on a GET request.
-- Authenticated commerce mutations use same-origin request checks in addition to signed SameSite session cookies.
+- Authenticated commerce and administrative mutations use same-origin request checks in addition to signed SameSite session cookies.
 - Payment confirmation is idempotent under concurrent/repeated callbacks so a successful Paystack payment cannot create duplicate entitlements.
 - API rate limits are enforced once by the shared PostgreSQL-backed route limiter rather than being double-counted by both proxy and route handler.
+- Stale signed cookies no longer trap frozen, archived, password-reset, or otherwise invalidated sessions away from the login/recovery flow; the live account/session state is checked before auth-page redirects.
+- Admin book create/update/delete/archive, pending-change review, and upload routes use explicit permission checks, input validation, same-origin mutation guards and route-specific rate limits.
 - Public health endpoints expose readiness only; detailed operational checks are available only to the Master Admin.
+- Content-Security-Policy and the standard security-header set are applied to normal public application pages, not only protected routes.
 - Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
 
 ## Technology stack
@@ -295,7 +298,7 @@ Courier template variables are documented in `.env.example`, including the email
 - Retained deleted-account evidence is gated by documented compliance purpose.
 - Payment entitlements are granted only after server-side Paystack verification.
 - Repeated or concurrent confirmation of the same purchase is serialized so exactly one entitlement is created.
-- Authenticated state-changing commerce routes reject explicit cross-origin browser requests.
+- Authenticated state-changing commerce and administrative routes reject explicit cross-origin browser requests.
 - Public health endpoints minimize infrastructure metadata; operational diagnostics require Master Admin authentication.
 
 ## Storage status and warning
