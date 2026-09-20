@@ -1,4 +1,13 @@
+'use client'
+
+import { usePathname } from 'next/navigation'
+import { isTranslationAllowedPath } from '@/lib/translation-routes'
+
 export function LanguageSwitcher() {
+  const pathname = usePathname()
+
+  if (!isTranslationAllowedPath(pathname)) return null
+
   return (
     <div
       className="fixed bottom-4 right-4 z-[90] flex items-center gap-2 rounded-full border border-border bg-background/95 px-3 py-2 shadow-lg backdrop-blur"
