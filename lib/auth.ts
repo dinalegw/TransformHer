@@ -347,12 +347,6 @@ function getAdminEmail(): string {
   return process.env.ADMIN_EMAIL || MASTER_ADMIN_EMAIL
 }
 
-function getAdminPassword(): string {
-  const password = process.env.ADMIN_PASSWORD
-  if (!password) throw new Error('ADMIN_PASSWORD is required to seed the initial admin account')
-  return password
-}
-
 let seedingDbAdmin = false
 
 export async function seedDbAdmin(): Promise<void> {
@@ -361,6 +355,12 @@ export async function seedDbAdmin(): Promise<void> {
   try {
     const db = await getDb()
     if (!db) return
+
+    const password = process.env.ADMIN_PASSWORD
+    if (!password) {
+      console.warn('[auth] ADMIN_PASSWORD is not configured; skipping initial admin seed')
+      return
+    }
 
     const email = normalizeEmail(getAdminEmail())
     const existing = await db.select({ id: userTable.id })
@@ -373,7 +373,7 @@ export async function seedDbAdmin(): Promise<void> {
       id: randomUUID(),
       name: 'Admin',
       email,
-      passwordHash: hashPassword(getAdminPassword()),
+      passwordHash: hashPassword(password),
       isAdmin: true,
       role: 'master_admin',
       rank: 'master',
