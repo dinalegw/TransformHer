@@ -258,109 +258,170 @@ export async function approveChange(changeId: string, reviewedBy: string): Promi
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
-  const existing = await db.select().from(pendingChanges).where(eq(pendingChanges.id, changeId)).limit(1)
-  if (existing.length === 0) throw new Error('Pending change not found')
-  if (existing[0].status !== 'pending') throw new Error('Change already processed')
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`pending-change:${changeId}`}, 0))`)
 
-  const change = existing[0]
-  const now = new Date()
-
-  const parsedChanges = JSON.parse(change.changes) as Partial<Book>
-
-  if (change.type === 'delete') {
-    await deleteBookBySlug(change.bookSlug)
-  } else if (change.type === 'archive') {
-    await archiveBook(change.bookSlug, parsedChanges.archived ?? true)
-  } else if (change.type === 'create') {
-    const slug = sanitizeSlug(parsedChanges.slug || generateSlug(parsedChanges.title || ''))
-    if (!slug) throw new Error('Could not generate a valid slug')
-
-    const slugExists = await db.select({ id: books.id })
-      .from(books)
-      .where(eq(books.slug, slug))
+    const rows = await tx.select().from(pendingChanges)
+      .where(eq(pendingChanges.id, changeId))
       .limit(1)
-    if (slugExists.length > 0) throw new Error('A book with this slug already exists')
+    const change = rows[0]
+    if (!change) throw new Error('Pending change not found')
+    if (change.status !== 'pending') throw new Error('Change already processed')
 
-    await db.insert(books).values({
-      slug,
-      title: parsedChanges.title ?? 'Untitled',
-      author: parsedChanges.author ?? 'Unknown',
-      category: (parsedChanges.category ?? 'Mindset & Confidence') as Book['category'],
-      price: parsedChanges.price ?? '0',
-      currency: (parsedChanges.currency ?? 'NGN') as Book['currency'],
-      coverImage: parsedChanges.coverImage ?? '',
-      fileUrl: parsedChanges.fileUrl ?? null,
-      tagline: parsedChanges.tagline ?? '',
-      description: parsedChanges.description ?? '',
-      rating: parsedChanges.rating ?? '5.0',
-      reviewsCount: parsedChanges.reviewsCount ?? 0,
-      pages: parsedChanges.pages ?? 0,
-      featured: parsedChanges.featured ?? false,
-      bestseller: parsedChanges.bestseller ?? false,
-      source: 'admin',
-      archived: false,
-      deleted: false,
-      createdAt: now,
-      updatedAt: now,
-    })
-  } else {
-    const rows = await db.select().from(books).where(eq(books.slug, change.bookSlug)).limit(1)
-    if (rows.length > 0) {
-      await db.update(books)
-        .set({ ...parsedChanges, updatedAt: now })
-        .where(eq(books.slug, change.bookSlug))
+    let parsedChanges: Partial<Book>
+    try {
+      parsedChanges = JSON.parse(change.changes) as Partial<Book>
+    } catch {
+      throw new Error('Pending change data is invalid')
     }
-  }
 
-  const [updated] = await db.update(pendingChanges)
-    .set({ status: 'approved', reviewedBy, reviewedAt: now })
-    .where(eq(pendingChanges.id, changeId))
-    .returning()
+    const now = new Date()
+
+    if (change.type === 'delete') {
+      const existing = await tx.select({ id: books.id }).from(books)
+        .where(eq(books.slug, change.bookSlug))
+        .limit(1)
+      if (!existing[0]) throw new Error('Book not found')
+      await tx.update(books)
+        .set({ deleted: true, archived: true, updatedAt: now })
+        .where(eq(books.slug, change.bookSlug))
+    } else if (change.type === 'archive') {
+      const existing = await tx.select({ id: books.id }).from(books)
+        .where(eq(books.slug, change.bookSlug))
+        .limit(1)
+      if (!existing[0]) throw new Error('Book not found')
+      await tx.update(books)
+        .set({ archived: parsedChanges.archived ?? true, updatedAt: now })
+        .where(eq(books.slug, change.bookSlug))
+    } else if (change.type === 'create') {
+      const slug = sanitizeSlug(parsedChanges.slug || generateSlug(parsedChanges.title || ''))
+      if (!slug) throw new Error('Could not generate a valid slug')
+
+      const slugExists = await tx.select({ id: books.id })
+        .from(books)
+        .where(eq(books.slug, slug))
+        .limit(1)
+      if (slugExists[0]) throw new Error('A book with this slug already exists')
+
+      await tx.insert(books).values({
+        slug,
+        title: parsedChanges.title ?? 'Untitled',
+        author: parsedChanges.author ?? 'Unknown',
+        category: (parsedChanges.category ?? 'Mindset & Confidence') as Book['category'],
+        price: parsedChanges.price ?? '0',
+        currency: (parsedChanges.currency ?? 'NGN') as Book['currency'],
+        coverImage: parsedChanges.coverImage ?? '',
+        fileUrl: parsedChanges.fileUrl ?? null,
+        tagline: parsedChanges.tagline ?? '',
+        description: parsedChanges.description ?? '',
+        rating: parsedChanges.rating ?? '5.0',
+        reviewsCount: parsedChanges.reviewsCount ?? 0,
+        pages: parsedChanges.pages ?? 0,
+        featured: parsedChanges.featured ?? false,
+        bestseller: parsedChanges.bestseller ?? false,
+        source: 'admin',
+        archived: false,
+        deleted: false,
+        createdAt: now,
+        updatedAt: now,
+      })
+    } else if (change.type === 'update') {
+      const existing = await tx.select().from(books)
+        .where(eq(books.slug, change.bookSlug))
+        .limit(1)
+      const currentBook = existing[0]
+      if (!currentBook) throw new Error('Book not found')
+      if (currentBook.deleted) throw new Error('Cannot update a deleted book')
+
+      const safeChanges = { ...parsedChanges }
+      if (safeChanges.slug) {
+        safeChanges.slug = sanitizeSlug(safeChanges.slug)
+        if (!safeChanges.slug) throw new Error('Could not generate a valid slug')
+        if (safeChanges.slug !== currentBook.slug) {
+          const slugExists = await tx.select({ id: books.id }).from(books)
+            .where(and(eq(books.slug, safeChanges.slug), ne(books.id, currentBook.id)))
+            .limit(1)
+          if (slugExists[0]) throw new Error('A book with this slug already exists')
+        }
+      }
+
+      await tx.update(books)
+        .set({ ...safeChanges, updatedAt: now })
+        .where(eq(books.id, currentBook.id))
+      parsedChanges = safeChanges
+    } else {
+      throw new Error('Unsupported pending change type')
+    }
+
+    const [updated] = await tx.update(pendingChanges)
+      .set({ status: 'approved', reviewedBy, reviewedAt: now })
+      .where(and(eq(pendingChanges.id, changeId), eq(pendingChanges.status, 'pending')))
+      .returning()
+
+    if (!updated) throw new Error('Change already processed')
+
+    return {
+      id: updated.id,
+      bookSlug: updated.bookSlug,
+      bookTitle: updated.bookTitle,
+      type: updated.type as PendingChange['type'],
+      changes: parsedChanges,
+      submittedBy: updated.submittedBy,
+      submittedByEmail: updated.submittedByEmail,
+      submittedAt: updated.submittedAt.toISOString(),
+      status: updated.status as PendingChange['status'],
+      reviewedBy: updated.reviewedBy ?? undefined,
+      reviewedAt: updated.reviewedAt?.toISOString(),
+    }
+  })
 
   invalidateBookCaches()
-
-  return {
-    id: updated.id,
-    bookSlug: updated.bookSlug,
-    bookTitle: updated.bookTitle,
-    type: updated.type as PendingChange['type'],
-    changes: parsedChanges,
-    submittedBy: updated.submittedBy,
-    submittedByEmail: updated.submittedByEmail,
-    submittedAt: updated.submittedAt.toISOString(),
-    status: updated.status as PendingChange['status'],
-    reviewedBy: updated.reviewedBy ?? undefined,
-    reviewedAt: updated.reviewedAt?.toISOString(),
-  }
+  return result
 }
 
 export async function rejectChange(changeId: string, reviewedBy: string): Promise<PendingChange> {
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
-  const existing = await db.select().from(pendingChanges).where(eq(pendingChanges.id, changeId)).limit(1)
-  if (existing.length === 0) throw new Error('Pending change not found')
-  if (existing[0].status !== 'pending') throw new Error('Change already processed')
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`pending-change:${changeId}`}, 0))`)
 
-  const now = new Date()
-  const [updated] = await db.update(pendingChanges)
-    .set({ status: 'rejected', reviewedBy, reviewedAt: now })
-    .where(eq(pendingChanges.id, changeId))
-    .returning()
+    const rows = await tx.select().from(pendingChanges)
+      .where(eq(pendingChanges.id, changeId))
+      .limit(1)
+    const existing = rows[0]
+    if (!existing) throw new Error('Pending change not found')
+    if (existing.status !== 'pending') throw new Error('Change already processed')
 
-  return {
-    id: updated.id,
-    bookSlug: updated.bookSlug,
-    bookTitle: updated.bookTitle,
-    type: updated.type as PendingChange['type'],
-    changes: JSON.parse(updated.changes),
-    submittedBy: updated.submittedBy,
-    submittedByEmail: updated.submittedByEmail,
-    submittedAt: updated.submittedAt.toISOString(),
-    status: updated.status as PendingChange['status'],
-    reviewedBy: updated.reviewedBy ?? undefined,
-    reviewedAt: updated.reviewedAt?.toISOString(),
-  }
+    const now = new Date()
+    const [updated] = await tx.update(pendingChanges)
+      .set({ status: 'rejected', reviewedBy, reviewedAt: now })
+      .where(and(eq(pendingChanges.id, changeId), eq(pendingChanges.status, 'pending')))
+      .returning()
+
+    if (!updated) throw new Error('Change already processed')
+
+    let changes: Partial<Book> = {}
+    try {
+      changes = JSON.parse(updated.changes)
+    } catch {
+      changes = {}
+    }
+
+    return {
+      id: updated.id,
+      bookSlug: updated.bookSlug,
+      bookTitle: updated.bookTitle,
+      type: updated.type as PendingChange['type'],
+      changes,
+      submittedBy: updated.submittedBy,
+      submittedByEmail: updated.submittedByEmail,
+      submittedAt: updated.submittedAt.toISOString(),
+      status: updated.status as PendingChange['status'],
+      reviewedBy: updated.reviewedBy ?? undefined,
+      reviewedAt: updated.reviewedAt?.toISOString(),
+    }
+  })
 }
 
 export async function listPendingChanges(): Promise<PendingChange[]> {
