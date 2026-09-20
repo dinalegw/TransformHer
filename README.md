@@ -9,13 +9,19 @@ TransformHer is a production-oriented digital bookstore and reading platform for
 
 TransformHer is no longer the original catalogue-only MVP. The current codebase includes production hardening across authentication, email delivery, payments, user lifecycle management, compliance evidence, scaling, and admin operations.
 
-At the latest repository audit on 17 September 2026:
+At the latest repository and production audit on 20 September 2026:
 
 - `main` passes install, TypeScript, ESLint, Vitest, and production-build CI.
-- The stable production hostname is `https://transformher.vercel.app`.
+- The latest audited production deployment is healthy and the stable production hostname is `https://transformher.vercel.app`.
 - Production customer email links are forced to the stable public hostname instead of an immutable `VERCEL_URL` deployment hostname.
 - Courier uses the TransformHer sender identity and `transformher360@gmail.com` as the official support / reply-to address.
-- The newest email-verification-code workflow is present on `main`. A Vercel Hobby build-rate limit can temporarily cause production to lag behind `main`; always verify the latest production deployment before declaring a feature live.
+- Registration verification links are bound to the exact account ID, normalized email and current `tokenVersion`; old links cannot verify a replacement account that later reuses the same email.
+- Verification links use a protected POST mutation after the verification page loads rather than changing account state on a GET request.
+- Authenticated commerce mutations use same-origin request checks in addition to signed SameSite session cookies.
+- Payment confirmation is idempotent under concurrent/repeated callbacks so a successful Paystack payment cannot create duplicate entitlements.
+- API rate limits are enforced once by the shared PostgreSQL-backed route limiter rather than being double-counted by both proxy and route handler.
+- Public health endpoints expose readiness only; detailed operational checks are available only to the Master Admin.
+- Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
 
 ## Technology stack
 
@@ -42,7 +48,7 @@ At the latest repository audit on 17 September 2026:
   - are signed
   - are bound to the account's current `tokenVersion`
   - become invalid after a successful reset
-- Registration email-verification links
+- Registration email-verification links bound to the exact user ID, email and current token version
 - Profile-based six-digit email verification flow for users who skipped verification during signup
 - Verified email shown as **Verified & locked**
 - Profile API does not expose a normal email-edit operation
@@ -288,12 +294,17 @@ Courier template variables are documented in `.env.example`, including the email
 - Self-service deletion requires re-authentication and explicit confirmation.
 - Retained deleted-account evidence is gated by documented compliance purpose.
 - Payment entitlements are granted only after server-side Paystack verification.
+- Repeated or concurrent confirmation of the same purchase is serialized so exactly one entitlement is created.
+- Authenticated state-changing commerce routes reject explicit cross-origin browser requests.
+- Public health endpoints minimize infrastructure metadata; operational diagnostics require Master Admin authentication.
 
-## Storage warning
+## Storage status and warning
 
 Do not store paid ebooks in `public/` or commit them into the public repository.
 
-Production uploads require persistent storage. Configure `BLOB_READ_WRITE_TOKEN` for Vercel Blob or use another private storage system with access-controlled / short-lived download URLs before treating paid content as fully protected.
+The application already refuses production admin uploads when persistent storage is unavailable. As of the 20 September 2026 production audit, `BLOB_READ_WRITE_TOKEN` is not connected, so **production ebook uploads are intentionally unavailable** rather than falling back to Vercel's ephemeral filesystem.
+
+Connect a private Vercel Blob store (or another private persistent storage backend with authenticated/short-lived reads) before treating production paid-content upload and delivery as complete.
 
 ## Quality gates
 
@@ -338,6 +349,9 @@ Before declaring a release complete, verify the actual production behavior rathe
 10. Paid content remains inaccessible without the required entitlement/release state.
 11. Courier message events show routing/provider success for critical email flows.
 12. Production runtime logs contain no unexplained 5xx clusters.
+13. Repeating the same successful Paystack confirmation does not create a second entitlement or duplicate confirmation email.
+14. Cross-origin browser requests cannot mutate cart, checkout, payment-confirmation, account-lifecycle, or sensitive admin state.
+15. Public health endpoints do not reveal secrets or unnecessary deployment/configuration internals.
 
 ## Engineering documentation
 
