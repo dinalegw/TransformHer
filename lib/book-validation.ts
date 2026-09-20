@@ -72,6 +72,26 @@ function safeAsset(value: unknown, field: string, required = false): string | nu
   return String(value).trim()
 }
 
+function safeBookFileRef(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (typeof value !== 'string') throw new Error('fileUrl must be text')
+
+  const candidate = value.trim()
+  if (!candidate || candidate.length > 500) throw new Error('fileUrl is invalid')
+
+  // Production uploads store the private Vercel Blob pathname. Local
+  // development uses the same namespace with a leading slash. Reject arbitrary
+  // remote URLs so the protected reader only serves files from storage managed
+  // by TransformHer.
+  const normalized = candidate.startsWith('/') ? candidate.slice(1) : candidate
+  if (!/^uploads\/books\/[a-z0-9-]{1,120}\/[A-Za-z0-9._-]{1,220}$/.test(normalized)) {
+    throw new Error('fileUrl must reference a TransformHer managed book upload')
+  }
+
+  return candidate
+}
+
 export function validateBookMutation(input: unknown, options: { partial?: boolean } = {}): ValidatedBookMutation {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw new Error('Invalid book payload')
@@ -109,7 +129,7 @@ export function validateBookMutation(input: unknown, options: { partial?: boolea
   const cover = safeAsset(body.coverImage, 'coverImage', !partial)
   if (cover !== undefined) result.coverImage = cover ?? '/placeholder.svg'
 
-  const file = safeAsset(body.fileUrl, 'fileUrl')
+  const file = safeBookFileRef(body.fileUrl)
   if (file !== undefined) result.fileUrl = file
 
   result.tagline = text(body.tagline, 'tagline', 400)
