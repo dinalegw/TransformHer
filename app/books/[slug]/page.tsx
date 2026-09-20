@@ -160,7 +160,7 @@ export default async function BookDetailPage({
                 ] : [
                   'Unlocked within 72 hours of purchase',
                   'Read on any device',
-                  'Lifetime ownership',
+                  'Saved to your personal library',
                   'Bookmarks & highlights',
                 ]).map((perk) => (
                   <li key={perk} className="flex items-center gap-2">
