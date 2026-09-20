@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { updatePassword, getUserNameByEmail } from '@/lib/auth'
-import { verifyPasswordResetToken } from '@/lib/password-reset'
+import { getUserNameByEmail } from '@/lib/auth'
+import { consumePasswordResetToken } from '@/lib/password-reset'
 import { sendPasswordChangedEmail } from '@/lib/email'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { isSameOriginRequest } from '@/lib/request-security'
@@ -31,14 +31,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Password must be at most 128 characters' }, { status: 400 })
     }
 
-    const email = await verifyPasswordResetToken(token)
+    const email = await consumePasswordResetToken(token, password)
     if (!email) {
-      return NextResponse.json({ error: 'Invalid or expired reset token' }, { status: 400 })
-    }
-
-    const updated = await updatePassword(email, password)
-    if (!updated) {
-      return NextResponse.json({ error: 'Password reset is temporarily unavailable.' }, { status: 503 })
+      return NextResponse.json({ error: 'Invalid, expired, or already used reset token' }, { status: 400 })
     }
 
     try {
