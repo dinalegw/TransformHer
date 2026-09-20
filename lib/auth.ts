@@ -2,7 +2,7 @@ import 'server-only'
 
 import { cookies } from 'next/headers'
 import { createHmac, pbkdf2Sync, randomBytes, randomUUID, timingSafeEqual } from 'crypto'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { user as userTable } from '@/lib/db/schema'
 import { MASTER_ADMIN_EMAIL, getDefaultPermissions } from '@/lib/permissions'
@@ -247,6 +247,32 @@ export async function updatePassword(email: string, password: string): Promise<b
     updatedAt: new Date(),
   }).where(eq(userTable.email, normalizeEmail(email)))
   return true
+}
+
+/**
+ * Atomically consume a password-reset capability by changing the password only
+ * if the account is still on the tokenVersion embedded in that reset token.
+ * Concurrent replays of the same reset link therefore have exactly one winner.
+ */
+export async function updatePasswordIfTokenVersion(
+  email: string,
+  password: string,
+  expectedTokenVersion: number,
+): Promise<boolean> {
+  const db = await getDb()
+  if (!db) return false
+
+  const updated = await db.update(userTable).set({
+    passwordHash: hashPassword(password),
+    tokenVersion: sql`${userTable.tokenVersion} + 1`,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(userTable.email, normalizeEmail(email)),
+    eq(userTable.tokenVersion, expectedTokenVersion),
+    eq(userTable.accountStatus, 'active'),
+  )).returning({ id: userTable.id })
+
+  return updated.length === 1
 }
 
 export async function updateUser(
