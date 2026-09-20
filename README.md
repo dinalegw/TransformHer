@@ -3,7 +3,8 @@
 TransformHer is a production-oriented digital bookstore and reading platform for women. It combines account management, a protected personal library, Paystack payments, Courier transactional email, role-based administration, account lifecycle controls, and audited compliance tooling.
 
 **Production:** https://transformher.vercel.app  
-**Official support / reply-to:** `transformher360@gmail.com`
+**Official support / reply-to:** `transformher360@gmail.com`  
+**Sponsor:** https://github.com/sponsors/dinalegw
 
 ## Current project state
 
@@ -25,6 +26,7 @@ At the latest repository and production audit on 20 September 2026:
 - Public health endpoints expose readiness only; detailed operational checks are available only to the Master Admin.
 - Content-Security-Policy and the standard security-header set are applied to normal public application pages, not only protected routes.
 - Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
+- translate.js provides client-side multilingual switching across its full translate.service catalogue, including Hausa, Igbo and Yoruba, with dynamic content translation enabled.
 
 ## Verified production baseline
 
