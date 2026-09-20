@@ -87,11 +87,11 @@ export async function proxy(request: NextRequest) {
 
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.paystack.co https://cdn.staticfile.net",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data: https:",
-    "connect-src 'self' https://api.paystack.co https://api.courier.com https://api.rendered.com",
+    "connect-src 'self' https://api.paystack.co https://api.courier.com https://api.rendered.com https://api.translate.zvo.cn https://api2.translate.zvo.cn",
     "frame-src https://standard.paystack.co https://checkout.paystack.com",
     "base-uri 'self'",
     "form-action 'self'",
