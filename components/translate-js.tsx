@@ -44,6 +44,10 @@ function initializeTranslateJs() {
   }
 
   if (initialized) {
+    // Next.js can call Script onReady again after route transitions/remounts.
+    // translate.js refreshRender() appends a new <select>, so clear the mount
+    // first to guarantee exactly one visible language selector.
+    document.getElementById('translate')?.replaceChildren()
     translate.selectLanguageTag?.refreshRender?.()
     return
   }
