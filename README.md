@@ -13,7 +13,7 @@ TransformHer is no longer the original catalogue-only MVP. The current codebase 
 At the latest repository and production audit on 20 September 2026:
 
 - `main` passes install, TypeScript, ESLint, Vitest, and production-build CI.
-- The latest audited production deployment is healthy and the stable production hostname is `https://transformher.vercel.app`.
+- The latest audited production deployment is READY on the stable hostname `https://transformher.vercel.app`; application readiness remains intentionally `degraded` only while private persistent ebook storage is not connected.
 - Production customer email links are forced to the stable public hostname instead of an immutable `VERCEL_URL` deployment hostname.
 - Courier uses the TransformHer sender identity and `transformher360@gmail.com` as the official support / reply-to address.
 - Registration verification links are bound to the exact account ID, normalized email and current `tokenVersion`; old links cannot verify a replacement account that later reuses the same email.
@@ -26,18 +26,22 @@ At the latest repository and production audit on 20 September 2026:
 - Public health endpoints expose readiness only; detailed operational checks are available only to the Master Admin.
 - Content-Security-Policy and the standard security-header set are applied to normal public application pages, not only protected routes.
 - Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
-- translate.js provides client-side multilingual switching across its full translate.service catalogue, including Hausa, Igbo and Yoruba, with dynamic content translation enabled.
+- translate.js provides client-side multilingual switching on public marketing/catalogue pages, including Hausa, Igbo and Yoruba. It is deliberately not loaded on authentication, account, cart, admin, verification or protected-library routes so sensitive page content is not sent to the third-party translation service.
+- Production cold starts no longer auto-seed the admin account or demo catalogue. Production seeding requires the explicit `ALLOW_PRODUCTION_SEEDING=true` operator opt-in.
+- A reusable production smoke command and manual GitHub Actions workflow verify public routes, health readiness and 404 behavior.
 
 ## Verified production baseline
 
 As of **20 September 2026**, the production baseline verified in this audit is:
 
-- `main` commit `61a58f1bec87abbb4610f0120bc43fc287926bab`
+- `main` commit `2e49640e34c5422e42cbe9016b5f0347ae2f251c`
 - CI: install, TypeScript, ESLint, Vitest and production build all passing
 - Vercel production deployment: READY on `https://transformher.vercel.app`
-- production runtime-error audit: no unexplained runtime error clusters in the checked 24-hour window
+- current production deployment runtime audit: no error or warning logs observed after the latest deployment verification; a prior admin-seed configuration error was traced to an older preview deployment and production auto-seeding has since been disabled
 - authentication, Courier configuration, database connectivity and pooled database scaling checks are healthy
-- multilingual translation and GitHub Sponsors support are deployed on production
+- multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only and repeated script readiness callbacks are de-duplicated so the language selector renders once
+- production smoke checks are available through `npm run smoke:prod` and the manual `Production smoke` GitHub Actions workflow
+- production cold-start seeding is disabled by default
 - the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected (tracked in issue #3)
 - `main` branch protection remains an account-level hardening task (tracked in issue #4)
 
