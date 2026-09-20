@@ -71,7 +71,7 @@ export function PaystackButton({
         disabled={loading}
       >
         {inCart ? <ArrowRight className="size-4" /> : <ShoppingCart className="size-4" />}
-        {loading ? 'Redirecting...' : inCart ? 'View in Cart' : 'Buy & Read Now'}
+        {loading ? 'Redirecting...' : inCart ? 'View in Cart' : 'Buy Now'}
       </Button>
       {error && (
         <p className="text-xs text-destructive max-w-64">{error}</p>
