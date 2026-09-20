@@ -10,6 +10,19 @@ import {
 } from '@/lib/admin-books'
 import type { Book } from '@/lib/admin-books'
 import { validateBookMutation } from '@/lib/book-validation'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
+
+function validBookId(raw: string): number | null {
+  const value = Number(raw)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+function validSlug(raw: string | null): string | null {
+  if (!raw) return null
+  const slug = raw.trim()
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) && slug.length <= 120 ? slug : null
+}
 
 export async function GET(
   _req: Request,
@@ -18,21 +31,18 @@ export async function GET(
   try {
     await requireAdmin()
     const { id } = await params
-    const bookId = Number(id)
-    if (Number.isNaN(bookId)) {
-      return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
-    }
+    const bookId = validBookId(id)
+    if (!bookId) return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
+
     const book = await getAdminBook(bookId)
-    if (!book) {
-      return NextResponse.json({ error: 'Book not found' }, { status: 404 })
-    }
+    if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     return NextResponse.json({ book })
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthorized: admin access required') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     console.error('Admin book GET error:', err)
-    return NextResponse.json({ error: 'Something went wrong' }, { status: 500 })
+    return NextResponse.json({ error: 'Unable to load this book right now.' }, { status: 500 })
   }
 }
 
@@ -41,14 +51,29 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireAdmin()
-    const { id } = await params
-    const bookId = Number(id)
-    if (Number.isNaN(bookId)) {
-      return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
+    if (!isSameOriginRequest(req)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
     }
 
-    const body = await req.json()
+    const rate = await checkRateLimit(req, '/api/admin/books/mutate')
+    if (!rate.allowed) {
+      const retryAfter = rate.retryAfter ?? 60
+      return NextResponse.json(
+        { error: 'Too many book changes. Please wait and try again.', retryAfter },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      )
+    }
+
+    const user = await requireAdmin()
+    const { id } = await params
+    const bookId = validBookId(id)
+    if (!bookId) return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
+
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') {
+      return NextResponse.json({ error: 'A valid JSON body is required' }, { status: 400 })
+    }
+
     let validated
     try {
       validated = validateBookMutation(body, { partial: true })
@@ -64,18 +89,21 @@ export async function PUT(
     }
 
     const isMaster = user.role === 'master_admin'
-
     if (!isMaster) {
       if (!hasPermission(user.permissions, 'edit_books')) {
         return NextResponse.json({ error: 'Forbidden: you lack the edit_books permission' }, { status: 403 })
       }
+
       const existing = await getAdminBook(bookId)
-      if (!existing) {
-        return NextResponse.json({ error: 'Book not found' }, { status: 404 })
-      }
+      if (!existing) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+
       const change = await submitPendingChange(
-        'update', existing.slug, existing.title,
-        validated as Partial<Book>, user.id, user.email,
+        'update',
+        existing.slug,
+        existing.title,
+        validated as Partial<Book>,
+        user.id,
+        user.email,
       )
       return NextResponse.json({ change, pending: true }, { status: 202 })
     }
@@ -102,61 +130,74 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    if (!isSameOriginRequest(req)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
+    const rate = await checkRateLimit(req, '/api/admin/books/mutate')
+    if (!rate.allowed) {
+      const retryAfter = rate.retryAfter ?? 60
+      return NextResponse.json(
+        { error: 'Too many book changes. Please wait and try again.', retryAfter },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      )
+    }
+
     const user = await requireAdmin()
     const { id } = await params
     const isMaster = user.role === 'master_admin'
+    const { searchParams } = new URL(req.url)
+    const slugParam = validSlug(searchParams.get('slug'))
 
     if (!isMaster) {
       if (!hasPermission(user.permissions, 'delete_books')) {
         return NextResponse.json({ error: 'Forbidden: you lack the delete_books permission' }, { status: 403 })
       }
 
-      const { searchParams } = new URL(req.url)
-      const slugParam = searchParams.get('slug')
-      const bookId = Number(id)
-
+      const bookId = validBookId(id)
       let book: Book | undefined
-      if (slugParam) {
+
+      if (searchParams.has('slug')) {
+        if (!slugParam) return NextResponse.json({ error: 'Invalid book slug' }, { status: 400 })
         const db = await getDb()
-        if (db) {
-          const rows = await db.select().from(books).where(eq(books.slug, slugParam)).limit(1)
-          book = rows[0] as Book | undefined
-        }
-      } else if (!Number.isNaN(bookId)) {
+        if (!db) return NextResponse.json({ error: 'Database unavailable' }, { status: 503 })
+        const rows = await db.select().from(books).where(eq(books.slug, slugParam)).limit(1)
+        book = rows[0] as Book | undefined
+      } else if (bookId) {
         book = await getAdminBook(bookId)
       }
 
-      if (!book) {
-        return NextResponse.json({ error: 'Book not found' }, { status: 404 })
-      }
+      if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
 
       const change = await submitPendingChange(
-        'delete', book.slug, book.title,
-        {}, user.id, user.email,
+        'delete',
+        book.slug,
+        book.title,
+        {},
+        user.id,
+        user.email,
       )
       return NextResponse.json({ change, pending: true }, { status: 202 })
     }
 
-    const { searchParams } = new URL(req.url)
     const source = searchParams.get('source')
+    if (source && source !== 'seed' && source !== 'admin') {
+      return NextResponse.json({ error: 'Invalid book source' }, { status: 400 })
+    }
 
     if (source === 'seed') {
-      const slug = searchParams.get('slug')
-      if (!slug) {
-        return NextResponse.json({ error: 'slug is required for seed book deletion' }, { status: 400 })
+      if (!slugParam) {
+        return NextResponse.json({ error: 'A valid slug is required for seed book deletion' }, { status: 400 })
       }
-      await deleteBookBySlug(slug)
+      await deleteBookBySlug(slugParam)
     } else {
-      const bookId = Number(id)
-      if (Number.isNaN(bookId)) {
-        const slug = searchParams.get('slug')
-        if (slug) {
-          await deleteBookBySlug(slug)
-        } else {
-          return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
-        }
-      } else {
+      const bookId = validBookId(id)
+      if (bookId) {
         await deleteAdminBook(bookId)
+      } else if (slugParam) {
+        await deleteBookBySlug(slugParam)
+      } else {
+        return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
       }
     }
 
