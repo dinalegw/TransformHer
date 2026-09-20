@@ -9,6 +9,7 @@ import { generateEmailVerificationLinkToken } from '@/lib/email-verification-lin
 import { sendWelcomeVerificationEmail, waitForCourierDispatch } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 function isHtmlForm(req: Request): boolean {
   const contentType = req.headers.get('content-type')?.toLowerCase() || ''
@@ -54,6 +55,12 @@ function signupSuccess(req: Request, mailSent: boolean) {
 
 export async function POST(req: Request) {
   let htmlForm = isHtmlForm(req)
+
+  if (!isSameOriginRequest(req)) {
+    return htmlForm
+      ? formError(req, 'Invalid request origin.')
+      : NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
 
   try {
     const rateLimit = await checkRateLimit(req, '/api/auth/register')
