@@ -5,7 +5,7 @@ import { SiteFooter } from '@/components/site-footer'
 
 export const metadata: Metadata = {
   title: 'FAQ',
-  description: 'Frequently asked questions about TransformHer accounts, payments, reading access, email verification and support.',
+  description: 'Frequently asked questions about TransformHer accounts, payments, reading access, email verification, account lifecycle, privacy and support.',
 }
 
 const SUPPORT_EMAIL = 'transformher360@gmail.com'
@@ -114,6 +114,22 @@ const FAQS = [
   {
     q: 'How does TransformHer protect actions such as checkout, cart changes and account administration?',
     a: 'Authenticated state-changing requests are checked against the signed-in account, protected with shared rate limits where appropriate, and reject explicit cross-origin browser requests. Sensitive admin actions also require the relevant administrator role or permission.',
+  },
+  {
+    q: 'Is TransformHer fully live in production?',
+    a: 'The core application is deployed and operating in production, including accounts, authentication, Paystack verification, Courier email, the customer library, admin controls, account lifecycle management, and compliance tooling. Production ebook file uploads remain intentionally disabled until private persistent Vercel Blob storage is connected, so paid-content upload and delivery should not be treated as complete until that storage connection is finished.',
+  },
+  {
+    q: 'Why can an admin see a message that ebook uploads are unavailable?',
+    a: 'TransformHer does not fall back to Vercel\'s temporary server filesystem for paid books. If private persistent Blob storage is not connected, the upload control is disabled so an ebook cannot appear to upload successfully and then disappear on another serverless instance or deployment.',
+  },
+  {
+    q: 'What is the difference between freezing and archiving an account?',
+    a: 'Both states prevent normal authenticated use and invalidate active sessions. Freezing is intended as a reversible restriction while an issue is reviewed. Archiving removes the account from normal active use but keeps it available for an authorized restore. Permanent deletion is a separate workflow that removes the active account after creating only the restricted retention record allowed by the platform policy.',
+  },
+  {
+    q: 'What information should I send when reporting a payment or library problem?',
+    a: `Send ${SUPPORT_EMAIL} your TransformHer account email, the affected book title, and the Paystack payment reference if you have one. Never send your password, OTP, card PIN, full card number, session cookie, reset link, verification code, or authentication token.`,
   },
   {
     q: 'How do I contact support?',

@@ -26,6 +26,22 @@ At the latest repository and production audit on 20 September 2026:
 - Content-Security-Policy and the standard security-header set are applied to normal public application pages, not only protected routes.
 - Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
 
+## Verified production baseline
+
+As of **20 September 2026**, the production baseline verified in this audit is:
+
+- `main` commit `1ebeb81ab2fd63cfb4ece7f0aeb3a2b26e19e609`
+- CI: install, TypeScript, ESLint, Vitest and production build all passing
+- Vercel production deployment: READY on `https://transformher.vercel.app`
+- production runtime-error audit: no unexplained runtime error clusters in the checked 24-hour window
+- authentication, Courier configuration, database connectivity and pooled database scaling checks are healthy
+- the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected
+
+The application deliberately refuses production ebook uploads while private persistent storage is unavailable. This is a safety control, not a fallback failure.
+
+For customer-facing guidance, see the live [FAQ](https://transformher.vercel.app/faq).
+
+
 ## Technology stack
 
 - **Framework:** Next.js 16, React 19, TypeScript
