@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth'
+import { hasPermission } from '@/lib/permissions'
 import { saveBookFile } from '@/lib/storage'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 const ALLOWED_EXT = ['pdf', 'doc', 'docx', 'epub', 'txt']
@@ -23,8 +26,28 @@ function hasAllowedSignature(buffer: Buffer, ext: string): boolean {
 }
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
+  const rate = await checkRateLimit(req, '/api/admin/books/upload')
+  if (!rate.allowed) {
+    const retryAfter = rate.retryAfter ?? 60
+    return NextResponse.json(
+      { error: 'Too many uploads. Please wait and try again.', retryAfter },
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+    )
+  }
+
   try {
-    await requireAdmin()
+    const user = await requireAdmin()
+    if (
+      user.role !== 'master_admin'
+      && !hasPermission(user.permissions, 'create_books')
+      && !hasPermission(user.permissions, 'edit_books')
+    ) {
+      return NextResponse.json({ error: 'Forbidden: book upload permission is required' }, { status: 403 })
+    }
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
@@ -38,11 +61,15 @@ export async function POST(req: Request) {
 
   try {
     const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const slug = formData.get('slug') as string | null
+    const file = formData.get('file')
+    const rawSlug = formData.get('slug')
 
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-    if (!slug) return NextResponse.json({ error: 'Book slug is required' }, { status: 400 })
+    if (!(file instanceof File)) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+
+    const slug = typeof rawSlug === 'string' ? rawSlug.trim() : ''
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120) {
+      return NextResponse.json({ error: 'A valid book slug is required' }, { status: 400 })
+    }
     if (file.size === 0) return NextResponse.json({ error: 'File is empty' }, { status: 400 })
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: 'File too large. Maximum size is 50MB' }, { status: 400 })
