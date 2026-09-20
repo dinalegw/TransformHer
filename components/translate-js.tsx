@@ -15,6 +15,11 @@ type TranslateJsApi = {
   listener?: {
     start?: () => void
   }
+  selectLanguageTag?: {
+    show?: boolean
+    documentId?: string
+    refreshRender?: () => void
+  }
   setAutoDiscriminateLocalLanguage?: () => void
   execute?: () => void
 }
@@ -25,9 +30,21 @@ declare global {
   }
 }
 
+let initialized = false
+
 function initializeTranslateJs() {
   const translate = window.translate
   if (!translate) return
+
+  if (translate.selectLanguageTag) {
+    translate.selectLanguageTag.show = true
+    translate.selectLanguageTag.documentId = 'translate'
+  }
+
+  if (initialized) {
+    translate.selectLanguageTag?.refreshRender?.()
+    return
+  }
 
   // TransformHer's source content is English.
   translate.language?.setLocal?.('english')
@@ -47,6 +64,7 @@ function initializeTranslateJs() {
   // translate.js to select an appropriate language for first-time visitors.
   translate.setAutoDiscriminateLocalLanguage?.()
   translate.execute?.()
+  initialized = true
 }
 
 export function TranslateJs() {
