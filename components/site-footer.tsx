@@ -69,12 +69,22 @@ export function SiteFooter() {
             <p className="mt-4 text-sm text-accent-foreground/70">
               Need help with your account or purchase?
             </p>
-            <Link
-              href="mailto:transformher360@gmail.com"
-              className="mt-2 inline-block text-sm text-primary hover:underline"
-            >
-              transformher360@gmail.com
-            </Link>
+            <div className="mt-2 flex flex-col items-start gap-1">
+              <Link
+                href="mailto:transformher360@gmail.com"
+                className="inline-block text-sm text-primary hover:underline"
+              >
+                transformher360@gmail.com
+              </Link>
+              <Link
+                href="https://github.com/sponsors/dinalegw"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block text-sm text-primary hover:underline"
+              >
+                Sponsor this project on GitHub
+              </Link>
+            </div>
           </div>
         </div>
 
