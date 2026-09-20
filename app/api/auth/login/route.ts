@@ -7,6 +7,7 @@ import { claimNotification } from '@/lib/notification-dedupe'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { SUPPORT_EMAIL } from '@/lib/support'
 import { recordSuccessfulLoginAccess } from '@/lib/access-history'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 function safeLocation(req: Request): string {
   const rawCity = req.headers.get('x-vercel-ip-city')?.trim() || ''
@@ -92,6 +93,12 @@ function blockedMessage(state: 'frozen' | 'archived' | 'deletion_pending'): stri
 export async function POST(req: Request) {
   let htmlForm = isHtmlForm(req)
   let redirectTo = '/books'
+
+  if (!isSameOriginRequest(req)) {
+    return htmlForm
+      ? formError(req, 'Invalid request origin.', redirectTo)
+      : NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
 
   try {
     const rateLimit = await checkRateLimit(req, '/api/auth/login')
