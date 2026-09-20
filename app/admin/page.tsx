@@ -24,6 +24,7 @@ export default async function AdminDashboardPage() {
   const totalAdmins = allUsers.filter(u => u.isAdmin).length
   const activeBooks = books.filter(b => !b.archived).length
   const isMaster = user?.role === 'master_admin'
+  const storageReady = !process.env.VERCEL || Boolean(process.env.BLOB_READ_WRITE_TOKEN)
 
   let deletedSummary: Awaited<ReturnType<typeof getDeletedAccountDashboardSummary>> = {
     total: 0,
@@ -130,6 +131,7 @@ export default async function AdminDashboardPage() {
             userEmail={user?.email ?? ''}
             userName={user?.name ?? ''}
             isMaster={isMaster}
+            storageReady={storageReady}
           />
         </Suspense>
       </div>

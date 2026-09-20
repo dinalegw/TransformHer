@@ -305,7 +305,7 @@ Courier template variables are documented in `.env.example`, including the email
 
 Do not store paid ebooks in `public/` or commit them into the public repository.
 
-The application already refuses production admin uploads when persistent storage is unavailable. As of the 20 September 2026 production audit, `BLOB_READ_WRITE_TOKEN` is not connected, so **production ebook uploads are intentionally unavailable** rather than falling back to Vercel's ephemeral filesystem.
+The application already refuses production admin uploads when persistent storage is unavailable, and the Admin book form disables the upload control with a clear storage-status message. As of the 20 September 2026 production audit, `BLOB_READ_WRITE_TOKEN` is not connected, so **production ebook uploads are intentionally unavailable** rather than falling back to Vercel's ephemeral filesystem.
 
 Connect a private Vercel Blob store (or another private persistent storage backend with authenticated/short-lived reads) before treating production paid-content upload and delivery as complete.
 

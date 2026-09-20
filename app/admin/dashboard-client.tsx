@@ -37,11 +37,12 @@ interface Props {
   userEmail: string
   userName: string
   isMaster: boolean
+  storageReady: boolean
 }
 
 type Tab = 'books' | 'users' | 'admins' | 'pending' | 'orders'
 
-export function AdminDashboardClient({ books, userRole, userEmail, userName, isMaster }: Props) {
+export function AdminDashboardClient({ books, userRole, userEmail, userName, isMaster, storageReady }: Props) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tab = (searchParams.get('tab') as Tab) || 'books'
@@ -95,6 +96,7 @@ export function AdminDashboardClient({ books, userRole, userEmail, userName, isM
           userRole={userRole}
           userEmail={userEmail}
           userName={userName}
+          storageReady={storageReady}
         />
       )}
 

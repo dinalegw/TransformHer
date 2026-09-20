@@ -8,7 +8,7 @@ export function SiteFooter() {
         <div className="grid gap-10 md:grid-cols-4">
           <div className="md:col-span-1">
             <span className="font-heading text-2xl">
-              Bookstore
+              TransformHer
             </span>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-accent-foreground/70">
               Transformational books for the woman becoming everything she was
@@ -64,17 +64,23 @@ export function SiteFooter() {
 
           <div>
             <h3 className="text-xs uppercase tracking-luxe text-primary">
-              Stay Close
+              Support
             </h3>
             <p className="mt-4 text-sm text-accent-foreground/70">
-              Join our circle for new releases and reflections.
+              Need help with your account or purchase?
             </p>
+            <Link
+              href="mailto:transformher360@gmail.com"
+              className="mt-2 inline-block text-sm text-primary hover:underline"
+            >
+              transformher360@gmail.com
+            </Link>
           </div>
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-accent-foreground/15 pt-6 text-xs text-accent-foreground/60 md:flex-row">
           <p>
-            {'\u00A9'} {new Date().getFullYear()} Bookstore. All rights
+            {'\u00A9'} {new Date().getFullYear()} TransformHer. All rights
             reserved.
           </p>
           <p>Made for women becoming.</p>

@@ -43,6 +43,7 @@ interface AdminBookManagerProps {
   userRole: string
   userEmail: string
   userName: string
+  storageReady: boolean
 }
 
 type FormMode = 'create' | 'edit'
@@ -83,7 +84,7 @@ const emptyForm: FormData = {
   slug: '',
 }
 
-export function AdminBookManager({ books, userRole }: AdminBookManagerProps) {
+export function AdminBookManager({ books, userRole, storageReady }: AdminBookManagerProps) {
   const router = useRouter()
   const [modal, setModal] = useState<{ mode: FormMode; book?: MergedBook } | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
@@ -456,7 +457,7 @@ export function AdminBookManager({ books, userRole }: AdminBookManagerProps) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="price" className="mb-1 block text-xs font-medium text-muted-foreground">
-                    Price (kobo) *
+                    Price ({form.currency || 'NGN'}) *
                   </label>
                   <Input
                     id="price"
@@ -499,13 +500,13 @@ export function AdminBookManager({ books, userRole }: AdminBookManagerProps) {
                 <div className="flex items-center gap-2">
                   <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm transition-colors hover:bg-muted">
                     <Upload className="size-4" />
-                    {uploading ? 'Uploading...' : 'Choose File'}
+                    {uploading ? 'Uploading...' : storageReady ? 'Choose File' : 'Storage unavailable'}
                     <input
                       type="file"
                       accept=".pdf,.doc,.docx,.epub,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/epub+zip,text/plain"
                       onChange={handleFileUpload}
                       className="hidden"
-                      disabled={uploading || !form.slug}
+                      disabled={uploading || !form.slug || !storageReady}
                     />
                   </label>
                   {uploading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
@@ -515,7 +516,12 @@ export function AdminBookManager({ books, userRole }: AdminBookManagerProps) {
                     File uploaded: {uploadedFile.split('/').pop()}
                   </p>
                 )}
-                {!form.slug && (
+                {!storageReady && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Production ebook uploads are disabled until private persistent storage is connected.
+                  </p>
+                )}
+                {storageReady && !form.slug && (
                   <p className="mt-1 text-xs text-amber-600">
                     Set a slug before uploading a file
                   </p>
