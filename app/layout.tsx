@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next'
 import { Playfair_Display, Inter, Geist_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { TranslateJs } from '@/components/translate-js'
+import { LanguageSwitcher } from '@/components/language-switcher'
 import './globals.css'
 
 const playfair = Playfair_Display({
@@ -68,6 +69,7 @@ export default function RootLayout({
         <ThemeProvider>
           {children}
         </ThemeProvider>
+        <LanguageSwitcher />
         <TranslateJs />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
