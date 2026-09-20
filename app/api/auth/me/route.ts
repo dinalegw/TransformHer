@@ -11,15 +11,6 @@ async function ensureDatabaseAvailable() {
 
 export async function GET() {
   try {
-    const rate = await checkRateLimit(req, '/api/auth/me/update')
-    if (!rate.allowed) {
-      const retryAfter = rate.retryAfter ?? 60
-      return NextResponse.json(
-        { error: 'Too many profile updates. Please wait and try again.', retryAfter },
-        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
-      )
-    }
-
     if (!(await ensureDatabaseAvailable())) {
       return NextResponse.json(
         { error: 'Account service is temporarily unavailable.' },
@@ -51,6 +42,15 @@ export async function PUT(req: Request) {
   try {
     if (!isSameOriginRequest(req)) {
       return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
+    const rate = await checkRateLimit(req, '/api/auth/me/update')
+    if (!rate.allowed) {
+      const retryAfter = rate.retryAfter ?? 60
+      return NextResponse.json(
+        { error: 'Too many profile updates. Please wait and try again.', retryAfter },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
+      )
     }
 
     if (!(await ensureDatabaseAvailable())) {
