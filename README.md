@@ -32,12 +32,14 @@ At the latest repository and production audit on 20 September 2026:
 
 As of **20 September 2026**, the production baseline verified in this audit is:
 
-- `main` commit `1ebeb81ab2fd63cfb4ece7f0aeb3a2b26e19e609`
+- `main` commit `61a58f1bec87abbb4610f0120bc43fc287926bab`
 - CI: install, TypeScript, ESLint, Vitest and production build all passing
 - Vercel production deployment: READY on `https://transformher.vercel.app`
 - production runtime-error audit: no unexplained runtime error clusters in the checked 24-hour window
 - authentication, Courier configuration, database connectivity and pooled database scaling checks are healthy
-- the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected
+- multilingual translation and GitHub Sponsors support are deployed on production
+- the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected (tracked in issue #3)
+- `main` branch protection remains an account-level hardening task (tracked in issue #4)
 
 The application deliberately refuses production ebook uploads while private persistent storage is unavailable. This is a safety control, not a fallback failure.
 
