@@ -384,3 +384,11 @@ Before declaring a release complete, verify the actual production behavior rathe
 ## License
 
 MIT.
+
+
+## Contributing and security
+
+TransformHer welcomes focused engineering contributions, testing and technical feedback.
+
+- Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening a pull request.
+- Report security vulnerabilities privately using [SECURITY.md](./SECURITY.md) rather than a public issue.
