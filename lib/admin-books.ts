@@ -5,7 +5,6 @@ import { sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { books, pendingChanges, type Book, type NewBook } from '@/lib/db/schema'
 import { invalidateCache, cacheWrapper } from '@/lib/db/cache'
-import { deleteBookFile } from '@/lib/storage'
 
 export type { Book, NewBook }
 
@@ -138,7 +137,9 @@ export async function updateAdminBook(
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
-  const existing = await db.select().from(books).where(eq(books.id, id)).limit(1)
+  const existing = await db.select().from(books)
+    .where(and(eq(books.id, id), eq(books.source, 'admin')))
+    .limit(1)
   if (existing.length === 0) throw new Error('Book not found')
   if (existing[0].deleted) throw new Error('Cannot update a deleted book')
 
@@ -167,14 +168,19 @@ export async function deleteAdminBook(id: number): Promise<void> {
   const db = await getDb()
   if (!db) throw new Error('Database not available')
 
-  const existing = await db.select().from(books).where(eq(books.id, id)).limit(1)
+  const existing = await db.select().from(books)
+    .where(and(eq(books.id, id), eq(books.source, 'admin')))
+    .limit(1)
   if (existing.length === 0) throw new Error('Book not found')
 
-  if (existing[0].fileUrl) {
-    deleteBookFile(existing[0].fileUrl)
-  }
+  // "Delete" is a storefront soft-delete. Hard deletion would cascade through
+  // user_purchases and erase paid entitlements. Keep the row and private file so
+  // existing purchasers can continue to read while the title disappears from
+  // catalogue/cart discovery.
+  await db.update(books)
+    .set({ deleted: true, archived: true, updatedAt: new Date() })
+    .where(and(eq(books.id, id), eq(books.source, 'admin')))
 
-  await db.delete(books).where(eq(books.id, id))
   invalidateBookCaches()
 }
 
