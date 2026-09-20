@@ -4,11 +4,16 @@ import { generatePasswordResetToken } from '@/lib/password-reset'
 import { sendPasswordResetEmail, waitForCourierDispatch } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 const SAFE_SUCCESS_MESSAGE =
   'Password reset request received. If an account matches this email, reset instructions will arrive shortly. Check your inbox and spam folder.'
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   try {
     const rateLimit = await checkRateLimit(req, '/api/auth/forgot-password')
     if (!rateLimit.allowed) {
@@ -18,7 +23,8 @@ export async function POST(req: Request) {
       )
     }
 
-    const { email } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { email } = body
     if (!email || typeof email !== 'string') {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
