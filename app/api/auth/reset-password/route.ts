@@ -3,8 +3,13 @@ import { updatePassword, getUserNameByEmail } from '@/lib/auth'
 import { verifyPasswordResetToken } from '@/lib/password-reset'
 import { sendPasswordChangedEmail } from '@/lib/email'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { isSameOriginRequest } from '@/lib/request-security'
 
 export async function POST(req: Request) {
+  if (!isSameOriginRequest(req)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+  }
+
   try {
     const rateLimit = await checkRateLimit(req, '/api/auth/reset-password')
     if (!rateLimit.allowed) {
@@ -14,7 +19,8 @@ export async function POST(req: Request) {
       )
     }
 
-    const { token, password } = await req.json()
+    const body = await req.json().catch(() => ({}))
+    const { token, password } = body
     if (!token || !password) {
       return NextResponse.json({ error: 'Token and password are required' }, { status: 400 })
     }
