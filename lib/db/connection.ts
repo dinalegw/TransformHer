@@ -226,10 +226,19 @@ async function establishConnection(): Promise<Db | null> {
 
     if (!_pgSeeded) {
       _pgSeeded = true
-      const { seedDbAdmin } = await import('@/lib/auth')
-      await seedDbAdmin().catch((error) => console.error('[db] Admin seed failed', error))
-      const { seedInitialBooks } = await import('@/lib/db/seed')
-      await seedInitialBooks().catch((error) => console.error('[db] Book seed failed', error))
+
+      // Never recreate demo/catalogue data or bootstrap an admin account on a
+      // production cold start unless an operator explicitly opts in.
+      const autoSeedAllowed =
+        process.env.NODE_ENV !== 'production' ||
+        process.env.ALLOW_PRODUCTION_SEEDING === 'true'
+
+      if (autoSeedAllowed) {
+        const { seedDbAdmin } = await import('@/lib/auth')
+        await seedDbAdmin().catch((error) => console.error('[db] Admin seed failed', error))
+        const { seedInitialBooks } = await import('@/lib/db/seed')
+        await seedInitialBooks().catch((error) => console.error('[db] Book seed failed', error))
+      }
     }
 
     return _pg
