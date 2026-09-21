@@ -169,7 +169,7 @@ export const SEED_BOOKS: SeedBook[] = [
     featured: false,
     bestseller: false,
     createdAt: new Date('2025-12-01'),
-  },,
+  },
   {
     id: 9,
     slug: 'becoming-bold',
