@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { isTranslationAllowedPath } from '@/lib/translation-routes'
 
 type TranslateJsApi = {
+  changeLanguage?: (language: string) => void
   language?: {
     setLocal?: (language: string) => void
   }
@@ -21,6 +22,7 @@ type TranslateJsApi = {
     show?: boolean
     documentId?: string
     refreshRender?: () => void
+    selectOnChange?: (event: Event) => void
   }
   setAutoDiscriminateLocalLanguage?: () => void
   execute?: () => void
@@ -58,6 +60,15 @@ function initializeTranslateJs() {
   if (translate.selectLanguageTag) {
     translate.selectLanguageTag.show = true
     translate.selectLanguageTag.documentId = 'translate'
+
+    // Bind the language action explicitly. translate.js documents this hook
+    // for select changes; relying on the library's implicit handler proved
+    // unreliable after Next.js remounts.
+    translate.selectLanguageTag.selectOnChange = (event) => {
+      const target = event.target as HTMLSelectElement | null
+      const language = target?.value
+      if (language) translate.changeLanguage?.(language)
+    }
   }
 
   keepExactlyOneNativeSelector()
