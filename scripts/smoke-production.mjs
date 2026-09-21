@@ -59,8 +59,8 @@ if (!healthResponse.ok) {
     failed = true
   }
 
-  if (health.status !== 'healthy' && !allowDegraded) {
-    console.error(`FAIL health status is ${health.status}, expected healthy`)
+  if (health.status !== 'ok' && !allowDegraded) {
+    console.error(`FAIL health status is ${health.status}, expected ok`)
     failed = true
   }
 }
