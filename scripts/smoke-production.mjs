@@ -12,11 +12,13 @@ const pages = [
   '/refund-policy',
 ]
 
-async function request(path) {
+async function request(path, init = {}) {
   const response = await fetch(`${baseUrl}${path}`, {
     redirect: 'manual',
+    ...init,
     headers: {
       'user-agent': 'TransformHer production smoke test',
+      ...(init.headers || {}),
     },
   })
 
@@ -59,6 +61,64 @@ if (!healthResponse.ok) {
 
   if (health.status !== 'healthy' && !allowDegraded) {
     console.error(`FAIL health status is ${health.status}, expected healthy`)
+    failed = true
+  }
+}
+
+const securityResponse = await request('/')
+const requiredSecurityHeaders = [
+  'content-security-policy',
+  'strict-transport-security',
+  'x-content-type-options',
+  'referrer-policy',
+  'permissions-policy',
+]
+for (const header of requiredSecurityHeaders) {
+  if (securityResponse.headers.get(header)) {
+    console.log(`PASS security header ${header}`)
+  } else {
+    console.error(`FAIL missing security header ${header}`)
+    failed = true
+  }
+}
+
+const protectedPages = ['/profile', '/library', '/admin']
+for (const path of protectedPages) {
+  const response = await request(path)
+  const location = response.headers.get('location') || ''
+  const protectedRoute =
+    response.status >= 300 &&
+    response.status < 400 &&
+    location.includes('/login')
+
+  console.log(
+    `${protectedRoute ? 'PASS' : 'FAIL'} ${response.status} protected route ${path}`,
+  )
+  if (!protectedRoute) failed = true
+}
+
+const libraryApi = await request('/api/library')
+if (libraryApi.status === 401) {
+  console.log('PASS unauthenticated library API is denied')
+} else {
+  console.error(
+    `FAIL unauthenticated library API returned ${libraryApi.status}, expected 401`,
+  )
+  failed = true
+}
+
+for (const path of ['/api/paystack/initialize', '/api/cart/checkout']) {
+  const response = await request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  })
+  if (response.status === 403) {
+    console.log(`PASS cross-origin mutation guard ${path}`)
+  } else {
+    console.error(
+      `FAIL mutation guard ${path} returned ${response.status}, expected 403`,
+    )
     failed = true
   }
 }
