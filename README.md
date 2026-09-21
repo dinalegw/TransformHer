@@ -10,7 +10,7 @@ TransformHer is a production-oriented digital bookstore and reading platform for
 
 TransformHer is no longer the original catalogue-only MVP. The current codebase includes production hardening across authentication, email delivery, payments, user lifecycle management, compliance evidence, scaling, and admin operations.
 
-At the latest repository and production audit on 20 September 2026:
+At the latest repository and production audit on 21 September 2026:
 
 - `main` passes install, TypeScript, ESLint, Vitest, and production-build CI.
 - The latest audited production deployment is READY on the stable hostname `https://transformher.vercel.app`; application readiness remains intentionally `degraded` only while private persistent ebook storage is not connected.
@@ -20,28 +20,32 @@ At the latest repository and production audit on 20 September 2026:
 - Verification links use a protected POST mutation after the verification page loads rather than changing account state on a GET request.
 - Authenticated commerce and administrative mutations use same-origin request checks in addition to signed SameSite session cookies.
 - Payment confirmation is idempotent under concurrent/repeated callbacks so a successful Paystack payment cannot create duplicate entitlements.
+- New verified digital purchases are released immediately after successful Paystack confirmation; the historical 72-hour lock no longer applies to new purchases.
 - API rate limits are enforced once by the shared PostgreSQL-backed route limiter rather than being double-counted by both proxy and route handler.
 - Stale signed cookies no longer trap frozen, archived, password-reset, or otherwise invalidated sessions away from the login/recovery flow; the live account/session state is checked before auth-page redirects.
 - Admin book create/update/delete/archive, pending-change review, and upload routes use explicit permission checks, input validation, same-origin mutation guards and route-specific rate limits.
 - Public health endpoints expose readiness only; detailed operational checks are available only to the Master Admin.
 - Content-Security-Policy and the standard security-header set are applied to normal public application pages, not only protected routes.
 - Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
-- translate.js provides client-side multilingual switching on public marketing/catalogue pages, including Hausa, Igbo and Yoruba. It is deliberately not loaded on authentication, account, cart, admin, verification or protected-library routes so sensitive page content is not sent to the third-party translation service.
+- translate.js provides client-side multilingual switching on public marketing/catalogue pages, including Hausa, Igbo and Yoruba. It uses the documented multi-node service-host configuration, and it is deliberately not loaded on authentication, account, cart, admin, verification or protected-library routes so sensitive page content is not sent to the third-party translation service.
 - Production cold starts no longer auto-seed the admin account or demo catalogue. Production seeding requires the explicit `ALLOW_PRODUCTION_SEEDING=true` operator opt-in.
+- Demo rows marked `source='seed'` are excluded from the production storefront, so only operator-managed real catalogue content is publicly sellable.
 - A reusable production smoke command and manual GitHub Actions workflow verify public routes, health readiness and 404 behavior.
 
 ## Verified production baseline
 
-As of **20 September 2026**, the production baseline verified in this audit is:
+As of **21 September 2026**, the production baseline verified in this audit is:
 
-- `main` commit `2e49640e34c5422e42cbe9016b5f0347ae2f251c`
+- `main` commit `3e1b743b29cf7495c8bc7868d81ebebed01ba72f`
 - CI: install, TypeScript, ESLint, Vitest and production build all passing
 - Vercel production deployment: READY on `https://transformher.vercel.app`
 - current production deployment runtime audit: no error or warning logs observed after the latest deployment verification; a prior admin-seed configuration error was traced to an older preview deployment and production auto-seeding has since been disabled
 - authentication, Courier configuration, database connectivity and pooled database scaling checks are healthy
-- multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only and repeated script readiness callbacks are de-duplicated so the language selector renders once
+- multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only, uses the documented service-host API, and repeated script readiness callbacks are de-duplicated so the language selector renders once
 - production smoke checks are available through `npm run smoke:prod` and the manual `Production smoke` GitHub Actions workflow
 - production cold-start seeding is disabled by default
+- demo `source='seed'` catalogue rows are hidden from public production queries
+- new verified purchases unlock immediately
 - the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected (tracked in issue #3)
 - `main` branch protection remains an account-level hardening task (tracked in issue #4)
 
@@ -104,7 +108,7 @@ The profile verification workflow is designed for horizontally scaled/serverless
 - Server-side Paystack verification
 - Ownership, amount, currency, metadata and idempotency checks
 - Purchase confirmation email
-- Delayed-release books
+- Immediate access after verified payment for new digital purchases
 - Protected personal library
 - Protected reader access for entitled users
 - Book-release email notification
