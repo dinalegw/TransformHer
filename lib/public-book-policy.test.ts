@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { shouldExcludeSeedBooks } from '@/lib/public-book-policy'
 
 describe('production catalogue policy', () => {
-  it('keeps demo seed books out of the commercial storefront by convention', () => {
-    // Seed rows remain available for development/admin cleanup, but production
-    // public queries in lib/books.ts explicitly exclude source='seed'.
-    expect(process.env.NODE_ENV).toBeDefined()
+  it('excludes demo seed books in production', () => {
+    expect(shouldExcludeSeedBooks('production')).toBe(true)
+  })
+
+  it('keeps seed books available for local development and tests', () => {
+    expect(shouldExcludeSeedBooks('development')).toBe(false)
+    expect(shouldExcludeSeedBooks('test')).toBe(false)
   })
 })
