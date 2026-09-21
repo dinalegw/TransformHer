@@ -7,6 +7,9 @@ const pages = [
   '/faq',
   '/login',
   '/signup',
+  '/privacy',
+  '/terms',
+  '/refund-policy',
 ]
 
 async function request(path) {

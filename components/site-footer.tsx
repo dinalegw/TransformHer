@@ -84,6 +84,15 @@ export function SiteFooter() {
               >
                 Sponsor this project on GitHub
               </Link>
+              <Link href="/privacy" className="inline-block text-sm text-primary hover:underline">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="inline-block text-sm text-primary hover:underline">
+                Terms of Use
+              </Link>
+              <Link href="/refund-policy" className="inline-block text-sm text-primary hover:underline">
+                Refund & Purchase Policy
+              </Link>
             </div>
           </div>
         </div>
