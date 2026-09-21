@@ -2,6 +2,7 @@ import 'server-only'
 import { eq, and, lte, sql } from 'drizzle-orm'
 import { getDb } from '@/lib/db/connection'
 import { userPurchases, cart as cartTable, books } from '@/lib/db/schema'
+import { getInitialPurchaseReleaseState } from '@/lib/purchase-release'
 
 export interface LibraryItem {
   id: number
@@ -132,14 +133,13 @@ export async function recordPurchase(
 
     if (existing.length > 0) return false
 
-    const releaseAt = new Date(Date.now() + 72 * 60 * 60 * 1000)
+    const releaseState = getInitialPurchaseReleaseState()
     await tx.insert(userPurchases).values({
       userId,
       bookId,
       bookSlug,
       paymentReference,
-      released: false,
-      releaseAt,
+      ...releaseState,
     })
 
     return true
