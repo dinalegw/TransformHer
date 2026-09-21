@@ -13,7 +13,9 @@ type TranslateJsApi = {
     use?: (service: string) => void
   }
   request?: {
-    setHost?: (hosts: string[]) => void
+    api?: {
+      host?: string | string[]
+    }
   }
   listener?: {
     start?: () => void
@@ -83,10 +85,12 @@ function initializeTranslateJs() {
 
   translate.language?.setLocal?.('english')
   translate.service?.use?.('translate.service')
-  translate.request?.setHost?.([
-    'https://api.translate.zvo.cn/',
-    'https://api2.translate.zvo.cn/',
-  ])
+  if (translate.request?.api) {
+    translate.request.api.host = [
+      'https://api.translate.zvo.cn/',
+      'https://api2.translate.zvo.cn/',
+    ]
+  }
   translate.listener?.start?.()
   translate.setAutoDiscriminateLocalLanguage?.()
   translate.execute?.()
