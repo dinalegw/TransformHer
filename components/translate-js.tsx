@@ -4,17 +4,9 @@ import Script from 'next/script'
 import { usePathname } from 'next/navigation'
 import { isTranslationAllowedPath } from '@/lib/translation-routes'
 
-type TranslateLanguage = {
-  id: string
-  name: string
-}
-
 type TranslateJsApi = {
-  to?: string
-  changeLanguage?: (language: string) => void
   language?: {
     setLocal?: (language: string) => void
-    getLocal?: () => string
   }
   service?: {
     use?: (service: string) => void
@@ -29,7 +21,6 @@ type TranslateJsApi = {
     show?: boolean
     documentId?: string
     refreshRender?: () => void
-    customUI?: (languageList: TranslateLanguage[]) => void
   }
   setAutoDiscriminateLocalLanguage?: () => void
   execute?: () => void
@@ -42,59 +33,40 @@ declare global {
 }
 
 let initialized = false
+let selectorObserver: MutationObserver | null = null
 
-function installSingleLanguageSelector(translate: TranslateJsApi) {
-  const selector = translate.selectLanguageTag
-  if (!selector) return
+function keepExactlyOneNativeSelector() {
+  const mount = document.getElementById('translate')
+  if (!mount) return
 
-  selector.show = true
-  selector.documentId = 'translate'
-
-  // translate.js officially supports replacing its native select renderer.
-  // Owning the renderer here guarantees the mount contains exactly one select,
-  // even when Next.js remounts the Script component or refreshRender runs again.
-  selector.customUI = (languageList) => {
-    const mount = document.getElementById('translate')
-    if (!mount) return
-
-    const select = document.createElement('select')
-    select.id = 'translateSelectLanguage'
-    select.className = 'translateSelectLanguage'
-    select.setAttribute('aria-label', 'Choose language')
-
-    const selectedLanguage =
-      translate.to || translate.language?.getLocal?.() || 'english'
-
-    const seen = new Set<string>()
-    for (const language of languageList) {
-      if (!language?.id || seen.has(language.id)) continue
-      seen.add(language.id)
-
-      const option = document.createElement('option')
-      option.value = language.id
-      option.textContent = language.name || language.id
-      option.selected = language.id === selectedLanguage
-      select.appendChild(option)
-    }
-
-    select.addEventListener('change', (event) => {
-      const target = event.currentTarget as HTMLSelectElement
-      translate.changeLanguage?.(target.value)
-    })
-
-    // Atomic replacement: never append alongside an older translator control.
-    mount.replaceChildren(select)
+  const dedupe = () => {
+    const selects = Array.from(mount.querySelectorAll('select'))
+    selects.slice(1).forEach((select) => select.remove())
   }
+
+  dedupe()
+
+  selectorObserver?.disconnect()
+  selectorObserver = new MutationObserver(dedupe)
+  selectorObserver.observe(mount, { childList: true, subtree: true })
 }
 
 function initializeTranslateJs() {
   const translate = window.translate
   if (!translate) return
 
-  installSingleLanguageSelector(translate)
+  if (translate.selectLanguageTag) {
+    translate.selectLanguageTag.show = true
+    translate.selectLanguageTag.documentId = 'translate'
+  }
+
+  keepExactlyOneNativeSelector()
 
   if (initialized) {
-    translate.selectLanguageTag?.refreshRender?.()
+    const mount = document.getElementById('translate')
+    if (mount && !mount.querySelector('select')) {
+      translate.selectLanguageTag?.refreshRender?.()
+    }
     return
   }
 
