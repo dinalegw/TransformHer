@@ -29,7 +29,7 @@ At the latest repository and production audit on 21 September 2026:
 - Production admin ebook uploads remain intentionally disabled until persistent private Vercel Blob storage is connected.
 - translate.js provides client-side multilingual switching on public marketing/catalogue pages, including Hausa, Igbo and Yoruba. It uses the documented multi-node service-host configuration, and it is deliberately not loaded on authentication, account, cart, admin, verification or protected-library routes so sensitive page content is not sent to the third-party translation service.
 - Production cold starts no longer auto-seed the admin account or demo catalogue. Production seeding requires the explicit `ALLOW_PRODUCTION_SEEDING=true` operator opt-in.
-- Demo rows marked `source='seed'` are excluded from the production storefront, so only operator-managed real catalogue content is publicly sellable.
+- The current site is in an active demo/developer-testing phase, so non-archived demo rows marked `source='seed'` remain visible in the public catalogue.
 - A reusable production smoke command and manual GitHub Actions workflow verify public routes, health readiness and 404 behavior.
 
 ## Verified production baseline
@@ -44,7 +44,7 @@ As of **21 September 2026**, the production baseline verified in this audit is:
 - multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only, uses the documented service-host API, and repeated script readiness callbacks are de-duplicated so the language selector renders once
 - production smoke checks are available through `npm run smoke:prod` and the manual `Production smoke` GitHub Actions workflow
 - production cold-start seeding is disabled by default
-- demo `source='seed'` catalogue rows are hidden from public production queries
+- active demo `source='seed'` catalogue rows remain visible during the demo/developer-testing phase
 - new verified purchases unlock immediately
 - the remaining infrastructure blocker is persistent private ebook storage: `BLOB_READ_WRITE_TOKEN` is not yet connected (tracked in issue #3)
 - `main` branch protection remains an account-level hardening task (tracked in issue #4)
