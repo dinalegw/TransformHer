@@ -11,6 +11,14 @@ export type { Book }
 
 const CACHE_PREFIX = 'books'
 
+function publicAvailabilityConditions() {
+  const conditions = publicAvailabilityConditions()
+  if (process.env.NODE_ENV === 'production') {
+    conditions.push(ne(books.source, 'seed'))
+  }
+  return conditions
+}
+
 function matchesQuery(book: { title: string; author: string; tagline?: string | null }, q: string): boolean {
   const query = q.toLowerCase()
   const tagline = book.tagline ?? ''
@@ -28,7 +36,7 @@ export async function getFeaturedBooks(limit = 6): Promise<Book[]> {
   return cacheWrapper(`${CACHE_PREFIX}:featured:${limit}`, async () => {
     const rows = await db.select()
       .from(books)
-      .where(and(eq(books.featured, true), eq(books.deleted, false), eq(books.archived, false)))
+      .where(and(eq(books.featured, true), ...publicAvailabilityConditions()))
       .orderBy(desc(books.reviewsCount))
       .limit(limit)
     return rows
@@ -42,7 +50,7 @@ export async function getBestsellers(limit = 4): Promise<Book[]> {
   return cacheWrapper(`${CACHE_PREFIX}:bestsellers:${limit}`, async () => {
     const rows = await db.select()
       .from(books)
-      .where(and(eq(books.bestseller, true), eq(books.deleted, false), eq(books.archived, false)))
+      .where(and(eq(books.bestseller, true), ...publicAvailabilityConditions()))
       .orderBy(desc(books.rating))
       .limit(limit)
     return rows
@@ -121,7 +129,7 @@ export async function getBookBySlug(slug: string): Promise<Book | undefined> {
 
   const rows = await db.select()
     .from(books)
-    .where(and(eq(books.slug, slug), eq(books.deleted, false), eq(books.archived, false)))
+    .where(and(eq(books.slug, slug), ...publicAvailabilityConditions()))
     .limit(1)
 
   if (rows.length === 0) return undefined
@@ -141,8 +149,7 @@ export async function getRelatedBooks(
     .where(and(
       eq(books.category, category as Book['category']),
       ne(books.slug, excludeSlug),
-      eq(books.deleted, false),
-      eq(books.archived, false),
+      ...publicAvailabilityConditions(),
     ))
     .limit(limit)
 
@@ -158,7 +165,7 @@ export async function getCategoryCounts(): Promise<Record<string, number>> {
     count: sql<number>`count(*)`,
   })
     .from(books)
-    .where(and(eq(books.deleted, false), eq(books.archived, false)))
+    .where(and(...publicAvailabilityConditions()))
     .groupBy(books.category)
 
   const counts: Record<string, number> = {}
