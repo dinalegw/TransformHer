@@ -4,9 +4,17 @@ import Script from 'next/script'
 import { usePathname } from 'next/navigation'
 import { isTranslationAllowedPath } from '@/lib/translation-routes'
 
+type TranslateLanguage = {
+  id: string
+  name: string
+}
+
 type TranslateJsApi = {
+  to?: string
+  changeLanguage?: (language: string) => void
   language?: {
     setLocal?: (language: string) => void
+    getLocal?: () => string
   }
   service?: {
     use?: (service: string) => void
@@ -21,6 +29,7 @@ type TranslateJsApi = {
     show?: boolean
     documentId?: string
     refreshRender?: () => void
+    customUI?: (languageList: TranslateLanguage[]) => void
   }
   setAutoDiscriminateLocalLanguage?: () => void
   execute?: () => void
@@ -34,20 +43,57 @@ declare global {
 
 let initialized = false
 
+function installSingleLanguageSelector(translate: TranslateJsApi) {
+  const selector = translate.selectLanguageTag
+  if (!selector) return
+
+  selector.show = true
+  selector.documentId = 'translate'
+
+  // translate.js officially supports replacing its native select renderer.
+  // Owning the renderer here guarantees the mount contains exactly one select,
+  // even when Next.js remounts the Script component or refreshRender runs again.
+  selector.customUI = (languageList) => {
+    const mount = document.getElementById('translate')
+    if (!mount) return
+
+    const select = document.createElement('select')
+    select.id = 'translateSelectLanguage'
+    select.className = 'translateSelectLanguage'
+    select.setAttribute('aria-label', 'Choose language')
+
+    const selectedLanguage =
+      translate.to || translate.language?.getLocal?.() || 'english'
+
+    const seen = new Set<string>()
+    for (const language of languageList) {
+      if (!language?.id || seen.has(language.id)) continue
+      seen.add(language.id)
+
+      const option = document.createElement('option')
+      option.value = language.id
+      option.textContent = language.name || language.id
+      option.selected = language.id === selectedLanguage
+      select.appendChild(option)
+    }
+
+    select.addEventListener('change', (event) => {
+      const target = event.currentTarget as HTMLSelectElement
+      translate.changeLanguage?.(target.value)
+    })
+
+    // Atomic replacement: never append alongside an older translator control.
+    mount.replaceChildren(select)
+  }
+}
+
 function initializeTranslateJs() {
   const translate = window.translate
   if (!translate) return
 
-  if (translate.selectLanguageTag) {
-    translate.selectLanguageTag.show = true
-    translate.selectLanguageTag.documentId = 'translate'
-  }
+  installSingleLanguageSelector(translate)
 
   if (initialized) {
-    // Next.js can call Script onReady again after route transitions/remounts.
-    // translate.js refreshRender() appends a new <select>, so clear the mount
-    // first to guarantee exactly one visible language selector.
-    document.getElementById('translate')?.replaceChildren()
     translate.selectLanguageTag?.refreshRender?.()
     return
   }
