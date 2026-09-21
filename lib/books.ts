@@ -4,7 +4,6 @@ import { getDb } from '@/lib/db/connection'
 import { books, type Book } from '@/lib/db/schema'
 import { cacheWrapper } from '@/lib/db/cache'
 import { CATEGORIES } from '@/lib/constants'
-import { shouldExcludeSeedBooks } from '@/lib/public-book-policy'
 
 export { CATEGORIES }
 
@@ -13,11 +12,7 @@ export type { Book }
 const CACHE_PREFIX = 'books'
 
 function publicAvailabilityConditions() {
-  const conditions = [eq(books.deleted, false), eq(books.archived, false)]
-  if (shouldExcludeSeedBooks()) {
-    conditions.push(ne(books.source, 'seed'))
-  }
-  return conditions
+  return [eq(books.deleted, false), eq(books.archived, false)]
 }
 
 function matchesQuery(book: { title: string; author: string; tagline?: string | null }, q: string): boolean {
