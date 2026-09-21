@@ -12,7 +12,7 @@ export type { Book }
 const CACHE_PREFIX = 'books'
 
 function publicAvailabilityConditions() {
-  const conditions = publicAvailabilityConditions()
+  const conditions = [eq(books.deleted, false), eq(books.archived, false)]
   if (process.env.NODE_ENV === 'production') {
     conditions.push(ne(books.source, 'seed'))
   }
@@ -65,7 +65,7 @@ export async function getAllBooks(opts?: {
   const db = await getDb()
   if (!db) return []
 
-  const conditions = [eq(books.deleted, false), eq(books.archived, false)]
+  const conditions = publicAvailabilityConditions()
 
   if (opts?.category && opts.category !== 'All') {
     conditions.push(eq(books.category, opts.category as Book['category']))
