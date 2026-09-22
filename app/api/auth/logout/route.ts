@@ -7,7 +7,14 @@ export async function POST(req: Request) {
   }
 
   const res = NextResponse.json({ success: true })
-  for (const name of ['session', 'transformher_session']) {
+  for (const name of [
+    'session',
+    'transformher_session',
+    'better-auth.session_token',
+    '__Secure-better-auth.session_token',
+    'better-auth.session_data',
+    '__Secure-better-auth.session_data',
+  ]) {
     res.cookies.set(name, '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
