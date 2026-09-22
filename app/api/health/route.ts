@@ -4,6 +4,7 @@ import { getDb } from '@/lib/db/connection'
 import { getCourierTemplateId } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { SCALING_POLICY, getDatabaseConnection, getDbPoolMaxPerInstance } from '@/lib/scaling'
+import { isGoogleAuthConfigured } from '@/lib/social-auth'
 
 const REQUIRED_CONFIG_VARS = [
   'AUTH_SECRET',
@@ -47,10 +48,12 @@ export async function GET() {
   const db = await getDb()
   const databaseConnection = getDatabaseConnection()
   const scalingReady = Boolean(db) && databaseConnection.pooledPreferred
+  const googleAuthReady = isGoogleAuthConfigured()
   const mailReady = Boolean(process.env.COURIER_API_KEY)
     && REQUIRED_EMAIL_TEMPLATES.every((key) => templateReady(key))
   const coreReady = REQUIRED_CONFIG_VARS.every((key) => Boolean(process.env[key]))
     && mailReady
+    && googleAuthReady
     && Boolean(db)
   const storageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN)
   const status = coreReady ? (storageReady && scalingReady ? 'ok' : 'degraded') : 'error'
@@ -69,6 +72,7 @@ export async function GET() {
     status,
     coreReady,
     mailReady,
+    googleAuthReady,
     storageReady,
     scalingReady,
     publicBaseUrl,
@@ -88,6 +92,19 @@ export async function GET() {
       set: Boolean(val),
       note: val ? undefined : 'MISSING — add this to the Production environment',
     }
+  }
+
+  checks.GOOGLE_CLIENT_ID = {
+    set: Boolean(process.env.GOOGLE_CLIENT_ID),
+    note: process.env.GOOGLE_CLIENT_ID ? 'Google sign-in client configured' : 'MISSING — Google sign-in is unavailable',
+  }
+  checks.GOOGLE_CLIENT_SECRET = {
+    set: Boolean(process.env.GOOGLE_CLIENT_SECRET),
+    note: process.env.GOOGLE_CLIENT_SECRET ? 'Google sign-in secret configured' : 'MISSING — Google sign-in is unavailable',
+  }
+  checks.BETTER_AUTH_URL = {
+    set: Boolean(process.env.BETTER_AUTH_URL || process.env.TRANSFORMHER_PUBLIC_URL),
+    note: 'Google OAuth callback base URL should resolve to the stable TransformHer production hostname',
   }
 
   checks.COURIER_API_KEY = {
