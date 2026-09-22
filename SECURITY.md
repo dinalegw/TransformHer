@@ -19,7 +19,7 @@ Include:
 - potential impact
 - any suggested mitigation
 
-Do not include real user credentials, payment credentials, session cookies or unnecessary personal data.
+Do not include real user credentials, Google OAuth client secrets, payment credentials, session cookies or unnecessary personal data.
 
 ## Responsible testing
 
@@ -30,6 +30,7 @@ Please test only accounts and data you own or are explicitly authorized to use. 
 Security-relevant areas include:
 
 - authentication and session validation
+- Google OAuth callbacks, account linking and social-session bridging
 - role and permission enforcement
 - password reset and email verification
 - account freeze/archive/delete flows
