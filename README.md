@@ -10,13 +10,14 @@ TransformHer is a production-oriented digital bookstore and reading platform for
 
 TransformHer is no longer the original catalogue-only MVP. The current codebase includes production hardening across authentication, email delivery, payments, user lifecycle management, compliance evidence, scaling, and admin operations.
 
-At the latest repository and production audit on 21 September 2026:
+At the latest repository and production audit on 22 September 2026:
 
 - `main` passes install, TypeScript, ESLint, Vitest, and production-build CI.
 - The latest audited production deployment is READY on the stable hostname `https://transformher.vercel.app`; application readiness remains intentionally `degraded` only while private persistent ebook storage is not connected.
 - Production customer email links are forced to the stable public hostname instead of an immutable `VERCEL_URL` deployment hostname.
 - Courier uses the TransformHer sender identity and `transformher360@gmail.com` as the official support / reply-to address.
 - Registration verification links are bound to the exact account ID, normalized email and current `tokenVersion`; old links cannot verify a replacement account that later reuses the same email.
+- Google sign-up/sign-in is live through Better Auth and Google OAuth. Existing email/password users can link a verified Google identity only when the Google email exactly matches the TransformHer account; different-email linking is disabled, and successful linking reuses the existing user rather than creating a duplicate.
 - Verification links use a protected POST mutation after the verification page loads rather than changing account state on a GET request.
 - Authenticated commerce and administrative mutations use same-origin request checks in addition to signed SameSite session cookies.
 - Payment confirmation is idempotent under concurrent/repeated callbacks so a successful Paystack payment cannot create duplicate entitlements.
@@ -34,13 +35,14 @@ At the latest repository and production audit on 21 September 2026:
 
 ## Verified production baseline
 
-As of **21 September 2026**, the production baseline verified in this audit is:
+As of **22 September 2026**, the production baseline verified in this audit is:
 
-- `main` commit `3e1b743b29cf7495c8bc7868d81ebebed01ba72f`
+- `main` commit `f1cae5f28a72e35b482374211c22bb30506b4728`
 - CI: install, TypeScript, ESLint, Vitest and production build all passing
 - Vercel production deployment: READY on `https://transformher.vercel.app`
 - current production deployment runtime audit: no error or warning logs observed after the latest deployment verification; a prior admin-seed configuration error was traced to an older preview deployment and production auto-seeding has since been disabled
-- authentication, Courier configuration, database connectivity and pooled database scaling checks are healthy
+- authentication, Google OAuth, Courier configuration, database connectivity and pooled database scaling checks are healthy
+- Google sign-up/sign-in has been verified end-to-end in production: social sign-in initialization, Google callback, same-email account linking, TransformHer session bridging and `/api/auth/me` all completed successfully without creating a duplicate user
 - multilingual translation and GitHub Sponsors support are deployed on production; translation is scoped to public pages only, uses the documented service-host API, and repeated script readiness callbacks are de-duplicated so the language selector renders once
 - production smoke checks are available through `npm run smoke:prod` and the manual `Production smoke` GitHub Actions workflow
 - production cold-start seeding is disabled by default
@@ -59,6 +61,7 @@ For customer-facing guidance, see the live [FAQ](https://transformher.vercel.app
 - **Framework:** Next.js 16, React 19, TypeScript
 - **UI:** Tailwind CSS, Base UI / shadcn primitives, Lucide icons
 - **Database:** PostgreSQL / Neon with Drizzle ORM
+- **Authentication:** TransformHer signed sessions + Better Auth / Google OAuth
 - **Payments:** Paystack
 - **Transactional email:** Courier
 - **File storage:** Vercel Blob in production
@@ -70,6 +73,10 @@ For customer-facing guidance, see the live [FAQ](https://transformher.vercel.app
 ### Customer accounts and authentication
 
 - Account registration with validation and duplicate-email protection
+- Optional **Continue with Google** on both signup and login
+- Google OAuth handled with Better Auth using the existing Neon user/account/session/verification tables
+- Same-email account linking reuses the existing TransformHer user; different-email linking is rejected
+- Successful Google authentication is bridged into TransformHer's existing signed-session model so the rest of the application uses one authorization path
 - Registration does **not** automatically sign the new user in
 - Signed, stateless session cookies so any healthy Vercel instance can validate a session
 - Login and logout with shared rate limiting
@@ -250,6 +257,10 @@ Classic round-robin or sticky-session logic is intentionally not reimplemented i
 Important modules include:
 
 - `lib/auth.ts` — users, password hashing, signed sessions, roles and email-verification state
+- `lib/social-auth.ts` — Better Auth configuration, Google OAuth provider and same-email account-linking policy
+- `lib/auth-client.ts` — browser Better Auth client used by the Google sign-in control
+- `lib/db/social-auth-schema.ts` — compatibility mapping for the existing Better Auth OAuth columns
+- `app/api/auth/google/finalize/route.ts` — converts a successful Google OAuth session into the normal TransformHer signed session
 - `lib/password-reset.ts` — single-use password-reset token lifecycle
 - `lib/email-verification-code.ts` — six-digit profile verification codes
 - `lib/email.ts` — Courier client and transactional email sends
@@ -288,7 +299,12 @@ Core variables include:
 
 ```bash
 AUTH_SECRET=long-random-secret
+BETTER_AUTH_SECRET=optional-separate-social-auth-secret
 EMAIL_VERIFICATION_SECRET=optional-separate-verification-secret
+
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+BETTER_AUTH_URL=https://transformher.vercel.app
 
 POSTGRES_URL=postgres://pooled-connection
 POSTGRES_URL_NON_POOLING=postgres://direct-connection
@@ -316,6 +332,9 @@ Courier template variables are documented in `.env.example`, including the email
 ## Security model
 
 - Passwords are stored as salted password hashes, never plaintext.
+- Google OAuth secrets stay server-side in environment variables; browser code never receives `GOOGLE_CLIENT_SECRET`.
+- Google account linking trusts only the Google provider, requires the same email address, and keeps different-email implicit linking disabled.
+- OAuth success is not treated as application authorization by itself: the finalize route rechecks the TransformHer user and account status before issuing the normal signed TransformHer session.
 - Session cookies are signed and validated against `tokenVersion`.
 - Password changes and account lifecycle restrictions invalidate existing sessions by incrementing `tokenVersion`.
 - Password-reset tokens expire and become unusable after a successful reset.
@@ -333,7 +352,7 @@ Courier template variables are documented in `.env.example`, including the email
 
 Do not store paid ebooks in `public/` or commit them into the public repository.
 
-The application already refuses production admin uploads when persistent storage is unavailable, and the Admin book form disables the upload control with a clear storage-status message. As of the 20 September 2026 production audit, `BLOB_READ_WRITE_TOKEN` is not connected, so **production ebook uploads are intentionally unavailable** rather than falling back to Vercel's ephemeral filesystem.
+The application already refuses production admin uploads when persistent storage is unavailable, and the Admin book form disables the upload control with a clear storage-status message. As of the 22 September 2026 production audit, `BLOB_READ_WRITE_TOKEN` is not connected, so **production ebook uploads are intentionally unavailable** rather than falling back to Vercel's ephemeral filesystem.
 
 Connect a private Vercel Blob store (or another private persistent storage backend with authenticated/short-lived reads) before treating production paid-content upload and delivery as complete.
 
@@ -383,11 +402,14 @@ Before declaring a release complete, verify the actual production behavior rathe
 13. Repeating the same successful Paystack confirmation does not create a second entitlement or duplicate confirmation email.
 14. Cross-origin browser requests cannot mutate cart, checkout, payment-confirmation, account-lifecycle, or sensitive admin state.
 15. Public health endpoints do not reveal secrets or unnecessary deployment/configuration internals.
+16. Google signup/sign-in completes the Google callback, links an existing same-email account without duplication, and creates a normal TransformHer signed session.
+17. A second Google login to the same email reuses the same user and provider-account link instead of creating another user.
 
 ## Engineering documentation
 
 - [`docs/MASTER_PROMPT.md`](docs/MASTER_PROMPT.md) — general TransformHer engineering/hardening contract
 - [`docs/AUTH_RECOVERY_MASTER_PROMPT.md`](docs/AUTH_RECOVERY_MASTER_PROMPT.md) — password recovery and email verification production contract
+- [`docs/AUTHENTICATION.md`](docs/AUTHENTICATION.md) — current email/password + Google OAuth architecture, linking rules and session flow
 
 ## License
 

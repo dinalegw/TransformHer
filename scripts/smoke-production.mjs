@@ -45,10 +45,11 @@ if (!healthResponse.ok) {
   const requiredReady =
     health.coreReady === true &&
     health.mailReady === true &&
+    health.googleAuthReady === true &&
     health.scalingReady === true
 
   if (!requiredReady) {
-    console.error('FAIL core, mail, or scaling readiness is false')
+    console.error('FAIL core, mail, Google auth, or scaling readiness is false')
     failed = true
   }
 
@@ -95,6 +96,16 @@ for (const path of protectedPages) {
     `${protectedRoute ? 'PASS' : 'FAIL'} ${response.status} protected route ${path}`,
   )
   if (!protectedRoute) failed = true
+}
+
+const socialSessionApi = await request('/api/auth/get-session')
+if (socialSessionApi.status === 200) {
+  console.log('PASS Google/Better Auth session endpoint is available')
+} else {
+  console.error(
+    `FAIL Google/Better Auth session endpoint returned ${socialSessionApi.status}, expected 200`,
+  )
+  failed = true
 }
 
 const libraryApi = await request('/api/library')
