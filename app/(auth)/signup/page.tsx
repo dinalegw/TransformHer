@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { CheckCircle2, Mail, TriangleAlert, UserPlus } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { GoogleSignInButton } from '@/components/google-sign-in-button'
+import { isGoogleAuthConfigured } from '@/lib/social-auth'
 
 type SignupPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>
@@ -16,6 +18,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
   const error = first(params.error)
   const created = first(params.created) === '1'
   const mailState = first(params.mail)
+  const googleEnabled = isGoogleAuthConfigured()
 
   if (created) {
     const mailSent = mailState === 'sent'
@@ -87,7 +90,16 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
             <p className="mt-2 text-sm text-muted-foreground">Join our community</p>
           </div>
 
-          <form action="/api/auth/register" method="post" className="mt-8 space-y-5">
+          <div className="mt-8">
+            <GoogleSignInButton enabled={googleEnabled} />
+            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              <span>or continue with email</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          </div>
+
+          <form action="/api/auth/register" method="post" className="space-y-5">
             {error && (
               <p role="alert" className="rounded-lg bg-destructive/10 px-4 py-2 text-sm text-destructive">
                 {error}
