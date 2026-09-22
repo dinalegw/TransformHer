@@ -3,7 +3,7 @@ import 'server-only'
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { getDb } from '@/lib/db/connection'
-import { account, session, user, verification } from '@/lib/db/schema'
+import { socialAccount, socialSession, socialUser, socialVerification } from '@/lib/db/social-auth-schema'
 import { getBaseUrl } from '@/lib/utils'
 
 export function isGoogleAuthConfigured() {
@@ -27,7 +27,7 @@ async function createSocialAuth() {
   return betterAuth({
       database: drizzleAdapter(db, {
         provider: 'pg',
-        schema: { user, session, account, verification },
+        schema: { user: socialUser, session: socialSession, account: socialAccount, verification: socialVerification },
       }),
       secret,
       baseURL:
