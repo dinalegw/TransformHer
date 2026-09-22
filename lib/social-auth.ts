@@ -48,6 +48,8 @@ async function createSocialAuth() {
           enabled: true,
           trustedProviders: ['google'],
           allowDifferentEmails: false,
+          disableImplicitLinking: false,
+          requireLocalEmailVerified: false,
           updateUserInfoOnLink: false,
         },
       },
