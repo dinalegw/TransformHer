@@ -3,6 +3,8 @@ import { LogIn, Mail } from 'lucide-react'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { SUPPORT_EMAIL } from '@/lib/support'
+import { GoogleSignInButton } from '@/components/google-sign-in-button'
+import { isGoogleAuthConfigured } from '@/lib/social-auth'
 
 type LoginPageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>
@@ -21,6 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const redirectTo = safeRedirect(first(params.redirect) || '/books')
   const error = first(params.error)
   const showSupport = first(params.support) === '1'
+  const googleEnabled = isGoogleAuthConfigured()
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -33,7 +36,16 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
           </div>
 
-          <form action="/api/auth/login" method="post" className="mt-8 space-y-5">
+          <div className="mt-8">
+            <GoogleSignInButton redirectTo={redirectTo} enabled={googleEnabled} />
+            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+              <span className="h-px flex-1 bg-border" />
+              <span>or continue with email</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          </div>
+
+          <form action="/api/auth/login" method="post" className="space-y-5">
             <input type="hidden" name="redirect" value={redirectTo} />
             {error && (
               <div role="alert" className="rounded-lg bg-destructive/10 px-4 py-3 text-sm text-destructive">
