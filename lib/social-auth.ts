@@ -6,8 +6,6 @@ import { getDb } from '@/lib/db/connection'
 import { account, session, user, verification } from '@/lib/db/schema'
 import { getBaseUrl } from '@/lib/utils'
 
-let authPromise: Promise<ReturnType<typeof betterAuth>> | null = null
-
 export function isGoogleAuthConfigured() {
   return Boolean(
     process.env.GOOGLE_CLIENT_ID?.trim() &&
@@ -15,22 +13,23 @@ export function isGoogleAuthConfigured() {
   )
 }
 
-export async function getSocialAuth() {
-  if (authPromise) return authPromise
+async function createSocialAuth() {
+  const db = await getDb()
+  if (!db) throw new Error('Database not available')
 
-  authPromise = (async () => {
-    const db = await getDb()
-    if (!db) throw new Error('Database not available')
+  const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
+  const secret =
+    process.env.BETTER_AUTH_SECRET?.trim() ||
+    process.env.AUTH_SECRET?.trim()
+  if (!secret) throw new Error('Authentication secret is not configured')
 
-    const clientId = process.env.GOOGLE_CLIENT_ID?.trim()
-    const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim()
-
-    return betterAuth({
+  return betterAuth({
       database: drizzleAdapter(db, {
         provider: 'pg',
         schema: { user, session, account, verification },
       }),
-      secret: process.env.BETTER_AUTH_SECRET?.trim() || process.env.AUTH_SECRET,
+      secret,
       baseURL:
         process.env.BETTER_AUTH_URL?.trim() ||
         process.env.TRANSFORMHER_PUBLIC_URL?.trim() ||
@@ -52,8 +51,13 @@ export async function getSocialAuth() {
           updateUserInfoOnLink: false,
         },
       },
-    })
-  })()
+  })
+}
+
+let authPromise: ReturnType<typeof createSocialAuth> | null = null
+
+export async function getSocialAuth() {
+  if (!authPromise) authPromise = createSocialAuth()
 
   try {
     return await authPromise
