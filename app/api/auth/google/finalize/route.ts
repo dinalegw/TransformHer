@@ -51,6 +51,15 @@ export async function GET(request: Request) {
     const db = await getDb()
     if (!db) throw new Error('Database not available')
 
+    await db
+      .update(userTable)
+      .set({
+        emailVerified: true,
+        image: socialSession.user.image ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(userTable.id, socialSession.user.id))
+
     const rows = await db
       .select({
         id: userTable.id,
