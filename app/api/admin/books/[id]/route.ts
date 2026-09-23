@@ -5,7 +5,7 @@ import { hasPermission } from '@/lib/permissions'
 import { getDb } from '@/lib/db/connection'
 import { books } from '@/lib/db/schema'
 import {
-  getAdminBook, updateAdminBook, deleteAdminBook, deleteBookBySlug,
+  getAdminBook, getBookById, updateBookById, deleteAdminBook, deleteBookBySlug,
   submitPendingChange,
 } from '@/lib/admin-books'
 import type { Book } from '@/lib/admin-books'
@@ -34,7 +34,7 @@ export async function GET(
     const bookId = validBookId(id)
     if (!bookId) return NextResponse.json({ error: 'Invalid book ID' }, { status: 400 })
 
-    const book = await getAdminBook(bookId)
+    const book = await getBookById(bookId)
     if (!book) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
     return NextResponse.json({ book })
   } catch (err) {
@@ -94,7 +94,7 @@ export async function PUT(
         return NextResponse.json({ error: 'Forbidden: you lack the edit_books permission' }, { status: 403 })
       }
 
-      const existing = await getAdminBook(bookId)
+      const existing = await getBookById(bookId)
       if (!existing) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
 
       const change = await submitPendingChange(
@@ -108,7 +108,7 @@ export async function PUT(
       return NextResponse.json({ change, pending: true }, { status: 202 })
     }
 
-    const book = await updateAdminBook(bookId, validated)
+    const book = await updateBookById(bookId, validated)
     return NextResponse.json({ book })
   } catch (err) {
     if (err instanceof Error && err.message === 'Unauthorized: admin access required') {

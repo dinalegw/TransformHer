@@ -6,6 +6,7 @@ import { getCurrentUser, listAllUsers } from '@/lib/auth'
 import { getAllMergedBooks, countPendingChanges } from '@/lib/admin-books'
 import { getDeletedAccountDashboardSummary } from '@/lib/deleted-account-dashboard'
 import { AdminDashboardClient } from './dashboard-client'
+import { isPersistentBookStorageConfigured } from '@/lib/storage'
 
 export const metadata: Metadata = {
   title: 'Dashboard',
@@ -24,7 +25,7 @@ export default async function AdminDashboardPage() {
   const totalAdmins = allUsers.filter(u => u.isAdmin).length
   const activeBooks = books.filter(b => !b.archived).length
   const isMaster = user?.role === 'master_admin'
-  const storageReady = !process.env.VERCEL || Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+  const storageReady = !process.env.VERCEL || isPersistentBookStorageConfigured()
 
   let deletedSummary: Awaited<ReturnType<typeof getDeletedAccountDashboardSummary>> = {
     total: 0,

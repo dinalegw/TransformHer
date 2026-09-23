@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { upload } from '@vercel/blob/client'
 import { Plus, Edit, Trash2, X, Upload, Archive, ArchiveRestore, Loader2 } from 'lucide-react'
 import { formatPrice } from '@/lib/format'
 import { Button } from '@/components/ui/button'
@@ -92,11 +93,13 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
   const [deleting, setDeleting] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
 
   const openCreate = useCallback(() => {
     setForm(emptyForm)
     setUploadedFile(null)
+    setUploadProgress(0)
     setModal({ mode: 'create' })
     setError('')
   }, [])
@@ -120,6 +123,7 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
       slug: book.slug,
     })
     setUploadedFile(book.fileUrl || null)
+    setUploadProgress(0)
     setModal({ mode: 'edit', book })
     setError('')
   }, [])
@@ -127,6 +131,7 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
   const closeModal = useCallback(() => {
     setModal(null)
     setUploadedFile(null)
+    setUploadProgress(0)
     setError('')
   }, [])
 
@@ -144,51 +149,58 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
     if (!file) return
 
     setUploading(true)
+    setUploadProgress(0)
     setError('')
 
     try {
-      const slug = form.slug
+      const slug = form.slug.trim()
       if (!slug) {
         throw new Error('Please set a slug first')
       }
+      if (!storageReady) {
+        throw new Error('Private book storage is not connected yet.')
+      }
 
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('slug', slug)
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+      if (!['pdf', 'doc', 'docx', 'epub', 'txt'].includes(ext)) {
+        throw new Error('Unsupported book file type. Use PDF, DOC, DOCX, EPUB, or TXT.')
+      }
 
-      const res = await fetch('/api/admin/books/upload', {
-        method: 'POST',
-        body: formData,
+      const pathname = `uploads/books/${slug}/${crypto.randomUUID()}.${ext}`
+      const blob = await upload(pathname, file, {
+        access: 'private',
+        handleUploadUrl: '/api/admin/books/upload',
+        multipart: true,
+        onUploadProgress(progress) {
+          setUploadProgress(Math.round(progress.percentage))
+        },
       })
 
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Upload failed')
-
-      setUploadedFile(data.fileUrl)
-      setForm((prev) => ({ ...prev, fileUrl: data.fileUrl }))
+      setUploadedFile(blob.pathname)
+      setForm((prev) => ({ ...prev, fileUrl: blob.pathname }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
       setUploading(false)
     }
-  }, [form.slug])
+  }, [form.slug, storageReady])
 
   const handleSubmit = useCallback(async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
 
-    const isSeedEdit = modal?.mode === 'edit' && modal?.book?.source === 'seed'
+    const isEdit = modal?.mode === 'edit'
 
     let url: string
     let method: string
 
-    if (isSeedEdit || modal?.mode === 'create') {
+    if (isEdit) {
+      url = `/api/admin/books/${modal?.book?.id}`
+      method = 'PUT'
+    } else {
       url = '/api/admin/books'
       method = 'POST'
-    } else {
-      url = `/api/admin/books/${(modal?.book as { id: string })?.id}`
-      method = 'PUT'
     }
 
     const payload = { ...form }
@@ -273,8 +285,8 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
 
   return (
     <>
-      {error && (
-        <div className="mb-4 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+      {!modal && error && (
+        <div className="mb-4 whitespace-pre-wrap break-words rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -398,6 +410,12 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
               </Button>
             </div>
 
+            {error && (
+              <div className="mb-4 whitespace-pre-wrap break-words rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
+                {error}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label htmlFor="title" className="mb-1 block text-xs font-medium text-muted-foreground">
@@ -495,12 +513,12 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
               {/* File Upload */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  Book File (PDF, DOC, DOCX, EPUB, TXT — max 50MB)
+                  Book File (PDF, DOC, DOCX, EPUB, TXT)
                 </label>
                 <div className="flex items-center gap-2">
                   <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-input bg-transparent px-3 py-1.5 text-sm transition-colors hover:bg-muted">
                     <Upload className="size-4" />
-                    {uploading ? 'Uploading...' : storageReady ? 'Choose File' : 'Storage unavailable'}
+                    {uploading ? `Uploading ${uploadProgress}%` : storageReady ? 'Choose File' : 'Storage unavailable'}
                     <input
                       type="file"
                       accept=".pdf,.doc,.docx,.epub,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/epub+zip,text/plain"
@@ -510,6 +528,14 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
                     />
                   </label>
                   {uploading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+                {uploading && (
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted" aria-label={`Upload ${uploadProgress}% complete`}>
+                    <div
+                      className="h-full bg-primary transition-[width]"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                )}
                 </div>
                 {uploadedFile && (
                   <p className="mt-1 text-xs text-green-600">
@@ -518,7 +544,7 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
                 )}
                 {!storageReady && (
                   <p className="mt-1 text-xs text-amber-600">
-                    Production ebook uploads are disabled until private persistent storage is connected.
+                    Connect a private Vercel Blob store to enable admin device uploads. The app does not impose its own file-size cap; Vercel Blob/provider limits still apply.
                   </p>
                 )}
                 {storageReady && !form.slug && (
