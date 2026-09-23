@@ -63,15 +63,20 @@ export async function listAdminBooks(): Promise<Book[]> {
   }, 30_000)
 }
 
-export async function getAdminBook(id: number): Promise<Book | undefined> {
+export async function getBookById(id: number): Promise<Book | undefined> {
   const db = await getDb()
   if (!db) return undefined
 
   const rows = await db.select()
     .from(books)
-    .where(and(eq(books.id, id), eq(books.source, 'admin')))
+    .where(eq(books.id, id))
     .limit(1)
   return rows[0]
+}
+
+export async function getAdminBook(id: number): Promise<Book | undefined> {
+  const book = await getBookById(id)
+  return book?.source === 'admin' ? book : undefined
 }
 
 export async function findAdminBookBySlug(slug: string): Promise<Book | undefined> {
@@ -130,7 +135,7 @@ export async function createAdminBook(
   return inserted
 }
 
-export async function updateAdminBook(
+export async function updateBookById(
   id: number,
   updates: Partial<Omit<NewBook, 'id' | 'createdAt' | 'updatedAt'>>,
 ): Promise<Book> {
@@ -138,17 +143,18 @@ export async function updateAdminBook(
   if (!db) throw new Error('Database not available')
 
   const existing = await db.select().from(books)
-    .where(and(eq(books.id, id), eq(books.source, 'admin')))
+    .where(eq(books.id, id))
     .limit(1)
   if (existing.length === 0) throw new Error('Book not found')
   if (existing[0].deleted) throw new Error('Cannot update a deleted book')
 
-  if (updates.slug) updates.slug = sanitizeSlug(updates.slug)
+  const safeUpdates = { ...updates }
+  if (safeUpdates.slug) safeUpdates.slug = sanitizeSlug(safeUpdates.slug)
 
-  if (updates.slug && updates.slug !== existing[0].slug) {
+  if (safeUpdates.slug && safeUpdates.slug !== existing[0].slug) {
     const slugExists = await db.select({ id: books.id })
       .from(books)
-      .where(and(eq(books.slug, updates.slug), ne(books.id, id)))
+      .where(and(eq(books.slug, safeUpdates.slug), ne(books.id, id)))
       .limit(1)
     if (slugExists.length > 0) {
       throw new Error('A book with this slug already exists')
@@ -156,12 +162,21 @@ export async function updateAdminBook(
   }
 
   const [updated] = await db.update(books)
-    .set({ ...updates, updatedAt: new Date() })
+    .set({ ...safeUpdates, updatedAt: new Date() })
     .where(eq(books.id, id))
     .returning()
 
   invalidateBookCaches()
   return updated
+}
+
+export async function updateAdminBook(
+  id: number,
+  updates: Partial<Omit<NewBook, 'id' | 'createdAt' | 'updatedAt'>>,
+): Promise<Book> {
+  const existing = await getAdminBook(id)
+  if (!existing) throw new Error('Book not found')
+  return updateBookById(id, updates)
 }
 
 export async function deleteAdminBook(id: number): Promise<void> {
