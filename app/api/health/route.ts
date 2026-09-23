@@ -5,7 +5,7 @@ import { getCourierTemplateId } from '@/lib/email'
 import { getBaseUrl } from '@/lib/utils'
 import { SCALING_POLICY, getDatabaseConnection, getDbPoolMaxPerInstance } from '@/lib/scaling'
 import { isGoogleAuthConfigured } from '@/lib/social-auth'
-import { isPersistentBookStorageConfigured } from '@/lib/storage'
+import { canAccessPersistentBookStorage } from '@/lib/storage'
 
 const REQUIRED_CONFIG_VARS = [
   'AUTH_SECRET',
@@ -56,7 +56,7 @@ export async function GET() {
     && mailReady
     && googleAuthReady
     && Boolean(db)
-  const storageReady = isPersistentBookStorageConfigured()
+  const storageReady = await canAccessPersistentBookStorage()
   const status = coreReady ? (storageReady && scalingReady ? 'ok' : 'degraded') : 'error'
 
   // Public health output intentionally exposes readiness only. Detailed
