@@ -5,8 +5,13 @@ import { put, del, get } from '@vercel/blob'
 import { existsSync, mkdirSync, createReadStream, statSync, unlinkSync, writeFileSync } from 'fs'
 
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
-const USE_BLOB = Boolean(BLOB_TOKEN)
+const BLOB_OIDC_TOKEN = process.env.VERCEL_OIDC_TOKEN
+const USE_BLOB = Boolean(BLOB_TOKEN || BLOB_OIDC_TOKEN)
 const IS_VERCEL = Boolean(process.env.VERCEL)
+
+export function isPersistentBookStorageConfigured(): boolean {
+  return USE_BLOB
+}
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads', 'books')
 
 function sanitizeSlug(bookSlug: string): string {
@@ -82,7 +87,7 @@ export async function saveBookFile(bookSlug: string, fileName: string, buffer: B
 
     const blob = await put(pathname, Buffer.from(buffer), {
       access: 'private',
-      token: BLOB_TOKEN,
+      ...(BLOB_TOKEN ? { token: BLOB_TOKEN } : {}),
       addRandomSuffix: false,
       contentType: getFileMimeType(fileName),
     })
@@ -102,7 +107,7 @@ export async function saveBookFile(bookSlug: string, fileName: string, buffer: B
 export async function deleteBookFile(storageKey: string): Promise<void> {
   if (USE_BLOB) {
     try {
-      await del(storageKey, { token: BLOB_TOKEN })
+      await del(storageKey, BLOB_TOKEN ? { token: BLOB_TOKEN } : undefined)
     } catch {
       // Best-effort cleanup. Database changes must not leak provider internals.
     }
@@ -114,7 +119,10 @@ export async function deleteBookFile(storageKey: string): Promise<void> {
 export async function getFileStream(storageKey: string) {
   if (USE_BLOB) {
     try {
-      const result = await get(storageKey, { access: 'private', token: BLOB_TOKEN })
+      const result = await get(storageKey, {
+        access: 'private',
+        ...(BLOB_TOKEN ? { token: BLOB_TOKEN } : {}),
+      })
       if (!result || result.statusCode !== 200) return null
       return result.stream
     } catch {
@@ -127,7 +135,10 @@ export async function getFileStream(storageKey: string) {
 export async function getFileSize(storageKey: string): Promise<number | null> {
   if (USE_BLOB) {
     try {
-      const result = await get(storageKey, { access: 'private', token: BLOB_TOKEN })
+      const result = await get(storageKey, {
+        access: 'private',
+        ...(BLOB_TOKEN ? { token: BLOB_TOKEN } : {}),
+      })
       if (!result || result.statusCode !== 200) return null
       return result.blob.size ?? null
     } catch {
