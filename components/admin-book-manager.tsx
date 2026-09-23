@@ -67,6 +67,15 @@ interface FormData {
   slug: string
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 120)
+}
+
 const emptyForm: FormData = {
   title: '',
   author: '',
@@ -153,9 +162,10 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
     setError('')
 
     try {
-      const slug = form.slug.trim()
-      if (!slug) {
-        throw new Error('Please set a slug first')
+      const fileBaseName = file.name.replace(/\.[^.]+$/, '')
+      const slug = slugify(form.slug || form.title || fileBaseName) || `book-${crypto.randomUUID().slice(0, 8)}`
+      if (!form.slug) {
+        setForm((prev) => ({ ...prev, slug }))
       }
       if (!storageReady) {
         throw new Error('Private book storage is not connected yet.')
@@ -524,7 +534,7 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
                       accept=".pdf,.doc,.docx,.epub,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/epub+zip,text/plain"
                       onChange={handleFileUpload}
                       className="hidden"
-                      disabled={uploading || !form.slug || !storageReady}
+                      disabled={uploading || !storageReady}
                     />
                   </label>
                   {uploading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
@@ -548,8 +558,8 @@ export function AdminBookManager({ books, userRole, storageReady }: AdminBookMan
                   </p>
                 )}
                 {storageReady && !form.slug && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    Set a slug before uploading a file
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    The slug will be generated automatically from the title or file name when you upload.
                   </p>
                 )}
               </div>
