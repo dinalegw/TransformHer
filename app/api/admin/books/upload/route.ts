@@ -1,97 +1,90 @@
 import { NextResponse } from 'next/server'
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { requireAdmin } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
-import { saveBookFile } from '@/lib/storage'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { isSameOriginRequest } from '@/lib/request-security'
+import { isPersistentBookStorageConfigured } from '@/lib/storage'
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024
-const ALLOWED_EXT = ['pdf', 'doc', 'docx', 'epub', 'txt']
+const ALLOWED_CONTENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/epub+zip',
+  'application/zip',
+  'text/plain',
+]
 
-function hasAllowedSignature(buffer: Buffer, ext: string): boolean {
-  if (buffer.length === 0) return false
-  switch (ext) {
-    case 'pdf':
-      return buffer.subarray(0, 5).toString('latin1') === '%PDF-'
-    case 'epub':
-    case 'docx':
-      return buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04
-    case 'doc':
-      return buffer[0] === 0xd0 && buffer[1] === 0xcf && buffer[2] === 0x11 && buffer[3] === 0xe0
-    case 'txt':
-      return !buffer.subarray(0, 512).includes(0)
-    default:
-      return false
-  }
-}
+const PATHNAME_RE =
+  /^uploads\/books\/[a-z0-9]+(?:-[a-z0-9]+)*\/[A-Za-z0-9._-]+\.(pdf|doc|docx|epub|txt)$/i
 
 export async function POST(req: Request) {
   if (!isSameOriginRequest(req)) {
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
   }
 
-  const rate = await checkRateLimit(req, '/api/admin/books/upload')
-  if (!rate.allowed) {
-    const retryAfter = rate.retryAfter ?? 60
+  if (!isPersistentBookStorageConfigured()) {
     return NextResponse.json(
-      { error: 'Too many uploads. Please wait and try again.', retryAfter },
-      { status: 429, headers: { 'Retry-After': String(retryAfter) } },
-    )
-  }
-
-  try {
-    const user = await requireAdmin()
-    if (
-      user.role !== 'master_admin'
-      && !hasPermission(user.permissions, 'create_books')
-      && !hasPermission(user.permissions, 'edit_books')
-    ) {
-      return NextResponse.json({ error: 'Forbidden: book upload permission is required' }, { status: 403 })
-    }
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  if (process.env.VERCEL && !process.env.BLOB_READ_WRITE_TOKEN) {
-    return NextResponse.json(
-      { error: 'Book storage is not configured. Connect persistent private Blob storage before uploading books.' },
+      {
+        error:
+          'Private book storage is not connected yet. Connect a private Vercel Blob store to enable device uploads.',
+      },
       { status: 503 },
     )
   }
 
+  let body: HandleUploadBody
   try {
-    const formData = await req.formData()
-    const file = formData.get('file')
-    const rawSlug = formData.get('slug')
+    body = (await req.json()) as HandleUploadBody
+  } catch {
+    return NextResponse.json({ error: 'Invalid upload request' }, { status: 400 })
+  }
 
-    if (!(file instanceof File)) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+  try {
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (pathname) => {
+        const rate = await checkRateLimit(req, '/api/admin/books/upload')
+        if (!rate.allowed) {
+          throw new Error('Too many uploads. Please wait and try again.')
+        }
 
-    const slug = typeof rawSlug === 'string' ? rawSlug.trim() : ''
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 120) {
-      return NextResponse.json({ error: 'A valid book slug is required' }, { status: 400 })
-    }
-    if (file.size === 0) return NextResponse.json({ error: 'File is empty' }, { status: 400 })
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File too large. Maximum size is 50MB' }, { status: 400 })
-    }
+        const user = await requireAdmin()
+        if (
+          user.role !== 'master_admin'
+          && !hasPermission(user.permissions, 'create_books')
+          && !hasPermission(user.permissions, 'edit_books')
+        ) {
+          throw new Error('Forbidden: book upload permission is required')
+        }
 
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
-    if (!ALLOWED_EXT.includes(ext)) {
-      return NextResponse.json(
-        { error: 'Invalid file type. Allowed: PDF, DOC, DOCX, EPUB, TXT' },
-        { status: 400 },
-      )
-    }
+        if (!PATHNAME_RE.test(pathname)) {
+          throw new Error('Invalid book upload path or file type')
+        }
 
-    const buffer = Buffer.from(await file.arrayBuffer())
-    if (!hasAllowedSignature(buffer, ext)) {
-      return NextResponse.json({ error: 'File content does not match its type' }, { status: 400 })
-    }
+        return {
+          allowedContentTypes: ALLOWED_CONTENT_TYPES,
+          addRandomSuffix: false,
+          tokenPayload: JSON.stringify({
+            userId: user.id,
+            bookUpload: true,
+          }),
+        }
+      },
+      onUploadCompleted: async ({ blob }) => {
+        if (!PATHNAME_RE.test(blob.pathname)) {
+          throw new Error('Unexpected completed book upload path')
+        }
+      },
+    })
 
-    const fileUrl = await saveBookFile(slug, file.name, buffer)
-    return NextResponse.json({ fileUrl, fileName: file.name })
+    return NextResponse.json(jsonResponse)
   } catch (err) {
-    console.error('Upload error:', err)
-    return NextResponse.json({ error: 'Unable to upload this book right now.' }, { status: 500 })
+    console.error('Upload token/completion error:', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Unable to upload this book right now.' },
+      { status: 400 },
+    )
   }
 }
