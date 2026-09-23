@@ -1,7 +1,7 @@
 import 'server-only'
 import { join } from 'path'
 import { randomUUID } from 'crypto'
-import { put, del, get } from '@vercel/blob'
+import { put, del, get, list } from '@vercel/blob'
 import { existsSync, mkdirSync, createReadStream, statSync, unlinkSync, writeFileSync } from 'fs'
 
 const BLOB_TOKEN = process.env.BLOB_READ_WRITE_TOKEN
@@ -11,6 +11,21 @@ const IS_VERCEL = Boolean(process.env.VERCEL)
 
 export function isPersistentBookStorageConfigured(): boolean {
   return USE_BLOB
+}
+
+export async function canAccessPersistentBookStorage(): Promise<boolean> {
+  if (!IS_VERCEL) return true
+
+  try {
+    await list({
+      limit: 1,
+      ...(BLOB_TOKEN ? { token: BLOB_TOKEN } : {}),
+    })
+    return true
+  } catch (error) {
+    console.warn('[storage] private Blob readiness probe failed', error)
+    return false
+  }
 }
 const UPLOAD_DIR = join(process.cwd(), 'public', 'uploads', 'books')
 
