@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/auth'
 import { hasPermission } from '@/lib/permissions'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { isSameOriginRequest } from '@/lib/request-security'
-import { isPersistentBookStorageConfigured } from '@/lib/storage'
+import { canAccessPersistentBookStorage } from '@/lib/storage'
 
 const ALLOWED_CONTENT_TYPES = [
   'application/pdf',
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
   }
 
-  if (!isPersistentBookStorageConfigured()) {
+  if (!(await canAccessPersistentBookStorage())) {
     return NextResponse.json(
       {
         error:
